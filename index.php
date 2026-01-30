@@ -1,184 +1,189 @@
 <?php
 /**
- * Suropara Admin Portal - Login Entry Point (v3.0)
- * Handles authentication, session initiation, and logout.
+ * SUROPARA Admin Portal - Master Entry & Router (v3.0)
+ * Handles "God Mode" Authentication and Dynamic Module Routing.
  */
 
-// 1. Load Database Configuration
+// 1. Core Initialization
 require_once 'config/db.php';
+require_once 'includes/functions.php';
 
-// 2. Load Helper Functions (if available, otherwise define basic input cleaning)
-if (file_exists('includes/functions.php')) {
-    require_once 'includes/functions.php';
-} else {
-    // Fallback if functions.php isn't loaded yet
-    function cleanInput($data) {
-        return htmlspecialchars(stripslashes(trim($data)));
-    }
-}
-
-// 3. Handle Logout Request
+// 2. Handle Logout
 if (isset($_GET['logout'])) {
-    // Completely destroy session
+    // Audit online status before logout
+    if (isset($_SESSION['admin_id'])) {
+        $pdo->prepare("UPDATE admin_users SET is_online = 0 WHERE id = ?")->execute([$_SESSION['admin_id']]);
+    }
     session_unset();
     session_destroy();
-    // Redirect to self to clear query params
-    header("Location: index.php");
+    header("Location: index.php?msg=logged_out");
     exit;
 }
 
-// 4. Redirect if Already Logged In
-if (isset($_SESSION['admin_id']) && isset($_SESSION['admin_role']) && isset($_SESSION['admin_username'])) {
-    header("Location: modules/dashboard/index.php");
-    exit;
-}
+// 3. Authentication Check
+$isLoggedIn = isset($_SESSION['admin_id']) && isset($_SESSION['admin_role']);
 
+// 4. Handle Login POST
 $error = '';
-
-// 5. Handle Login Submission
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+if (!$isLoggedIn && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $username = cleanInput($_POST['username'] ?? '');
     $password = $_POST['password'] ?? '';
 
     if (empty($username) || empty($password)) {
-        $error = "Please enter both username and password.";
+        $error = "Credentials Required";
     } else {
         try {
-            // Fetch Admin User (Must be Active)
-            $stmt = $pdo->prepare("SELECT * FROM admin_users WHERE username = ? AND is_active = 1");
+            // Updated to match your provided table structure (admin_users)
+            $stmt = $pdo->prepare("SELECT * FROM admin_users WHERE username = ? AND is_active = 1 LIMIT 1");
             $stmt->execute([$username]);
             $admin = $stmt->fetch();
 
-            // Verify Password
             if ($admin && password_verify($password, $admin['password_hash'])) {
-                // Security: Regenerate Session ID to prevent Session Fixation attacks
                 session_regenerate_id(true);
-
+                
                 // Set Critical Session Variables
                 $_SESSION['admin_id'] = $admin['id'];
                 $_SESSION['admin_username'] = $admin['username'];
-                $_SESSION['admin_role'] = $admin['role'];
-                $_SESSION['login_time'] = time();
-
-                // Update Last Login Timestamp in DB
-                $pdo->prepare("UPDATE admin_users SET last_login = NOW() WHERE id = ?")->execute([$admin['id']]);
+                $_SESSION['admin_role'] = $admin['role']; // e.g., GOD, FINANCE, etc.
                 
-                // Audit Log (Optional, if audit_logs table exists)
-                try {
-                    $pdo->prepare("INSERT INTO audit_logs (admin_id, action, target_table) VALUES (?, 'LOGIN', 'auth')")->execute([$admin['id']]);
-                } catch (Exception $e) { /* Ignore audit error on login */ }
-
-                // Redirect to Dashboard
-                header("Location: modules/dashboard/index.php");
+                // CSRF Token - Stored in SESSION, not the database
+                $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+                
+                // Update Login Stats & Online Status
+                $pdo->prepare("UPDATE admin_users SET last_login = NOW(), is_online = 1 WHERE id = ?")->execute([$admin['id']]);
+                
+                // Redirect to the default dashboard module
+                header("Location: index.php?module=dashboard");
                 exit;
             } else {
-                $error = "Invalid Credentials or Account Suspended";
+                $error = "Access Denied: Invalid Credentials";
             }
         } catch (PDOException $e) {
-            $error = "System Error: Database connection failed.";
-            // error_log($e->getMessage()); // Log internal error
+            $error = "Core Database Link Failure";
         }
     }
 }
+
+// 5. ROUTING LOGIC (If Logged In)
+if ($isLoggedIn) {
+    $module = $_GET['module'] ?? 'dashboard';
+    
+    // Map Modules to Physical Files
+    $routes = [
+        'dashboard'  => 'modules/dashboard/index.php',
+        'live'       => 'modules/dashboard/live.php',
+        'users'      => 'modules/users/list.php',
+        'finance'    => 'modules/finance/queue.php',
+        'characters' => 'modules/characters/index.php',
+        'islands'    => 'modules/islands/index.php',
+        'settings'   => 'modules/settings/global.php',
+        'security'   => 'modules/security/index.php',
+        'social'     => 'modules/social/chat.php'
+    ];
+
+    $targetFile = $routes[$module] ?? 'modules/dashboard/index.php';
+
+    if (file_exists($targetFile)) {
+        /**
+         * SAFETY FIX: We define $pathDepth here with a max(0) safeguard.
+         * This prevents the str_repeat error when PHP_SELF count is low.
+         */
+        $pathDepth = max(0, substr_count($_SERVER['PHP_SELF'], '/') - 2);
+
+        // Wrap the module content in the modern layout
+        require_once 'layout/main.php';
+        include $targetFile;
+        require_once 'layout/footer.php';
+        exit;
+    } else {
+        // Fallback for missing files
+        header("Location: index.php?module=dashboard&error=not_found");
+        exit;
+    }
+}
+
+// 6. LOGIN INTERFACE (If NOT Logged In)
 ?>
 <!DOCTYPE html>
-<html lang="en" data-bs-theme="dark">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Suropara God Portal</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <title>SUROPARA | God Mode Access</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;800&display=swap" rel="stylesheet">
     <style>
-        body { 
-            background: #0f172a; 
-            color: #fff; 
-            display: flex; 
-            align-items: center; 
-            justify-content: center; 
-            height: 100vh; 
-            font-family: 'Segoe UI', sans-serif;
-            overflow: hidden;
+        body { font-family: 'Plus Jakarta Sans', sans-serif; background-color: #020617; }
+        .glow-overlay {
+            background: radial-gradient(circle at 50% 50%, rgba(37, 99, 235, 0.15) 0%, rgba(2, 6, 23, 0) 70%);
         }
-        .login-card { 
-            background: #1e293b; 
-            border: 1px solid #334155; 
-            width: 100%; 
-            max-width: 400px; 
-            box-shadow: 0 20px 50px rgba(0,0,0,0.5); 
-            border-radius: 12px;
-            position: relative;
-            z-index: 10;
+        .glass-card {
+            background: rgba(30, 41, 59, 0.7);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
         }
-        .btn-neon { 
-            background: #00f3ff; 
-            color: #000; 
-            font-weight: 800; 
-            border: none; 
-            transition: 0.3s; 
-            letter-spacing: 1px;
+        @keyframes subtle-float {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-10px); }
         }
-        .btn-neon:hover { 
-            background: #00c4cf; 
-            box-shadow: 0 0 20px rgba(0, 243, 255, 0.4); 
-            transform: translateY(-2px); 
-        }
-        .form-control {
-            background-color: #0f172a;
-            border-color: #334155;
-            color: #fff;
-        }
-        .form-control:focus { 
-            background-color: #0f172a;
-            color: #fff; 
-            border-color: #00f3ff; 
-            box-shadow: 0 0 0 0.25rem rgba(0, 243, 255, 0.1); 
-        }
-        
-        /* Background FX */
-        .bg-glow {
-            position: absolute;
-            width: 600px;
-            height: 600px;
-            background: radial-gradient(circle, rgba(0,243,255,0.05) 0%, rgba(0,0,0,0) 70%);
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            z-index: 0;
-            pointer-events: none;
-        }
+        .float-anim { animation: subtle-float 6s ease-in-out infinite; }
     </style>
 </head>
-<body>
+<body class="h-screen flex items-center justify-center overflow-hidden p-4">
 
-    <div class="bg-glow"></div>
+    <!-- Background FX -->
+    <div class="fixed inset-0 glow-overlay z-0"></div>
+    <div class="fixed top-[-10%] left-[-10%] w-[40%] h-[40%] bg-blue-600/10 blur-[120px] rounded-full"></div>
+    <div class="fixed bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-indigo-600/10 blur-[120px] rounded-full"></div>
 
-    <div class="login-card p-5">
-        <div class="text-center mb-5">
-            <h2 class="text-info fw-black tracking-widest mb-1">SUROPARA</h2>
-            <p class="text-secondary small fw-bold letter-spacing-2 m-0" style="letter-spacing: 2px;">GOD MODE ACCESS</p>
+    <!-- Login Container -->
+    <div class="w-full max-w-md z-10 float-anim">
+        <div class="glass-card rounded-[2rem] p-8 md:p-12 shadow-2xl">
+            <div class="text-center mb-10">
+                <div class="inline-flex items-center justify-center w-16 h-16 bg-blue-600 rounded-2xl mb-6 shadow-xl shadow-blue-600/20">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="w-8 h-8 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                </div>
+                <h1 class="text-3xl font-black text-white tracking-tighter uppercase mb-2">Suropara</h1>
+                <p class="text-slate-400 text-xs font-bold uppercase tracking-[0.3em] opacity-60">God Mode Access Only</p>
+            </div>
+
+            <?php if ($error): ?>
+            <div class="mb-6 bg-red-500/10 border border-red-500/20 text-red-400 p-4 rounded-xl text-xs font-bold text-center animate-pulse">
+                <span class="mr-2">⚠️</span> <?php echo $error; ?>
+            </div>
+            <?php endif; ?>
+
+            <form action="index.php" method="POST" class="space-y-6">
+                <div>
+                    <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2 ml-1">Secure Username</label>
+                    <input type="text" name="username" required autofocus
+                        class="w-full bg-slate-900/50 border border-slate-700 text-white rounded-2xl px-5 py-4 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all placeholder-slate-600 font-semibold"
+                        placeholder="Enter admin ID">
+                </div>
+                <div>
+                    <label class="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2 ml-1">System Cipher</label>
+                    <input type="password" name="password" required
+                        class="w-full bg-slate-900/50 border border-slate-700 text-white rounded-2xl px-5 py-4 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all placeholder-slate-600 font-semibold"
+                        placeholder="••••••••">
+                </div>
+
+                <button type="submit" 
+                    class="w-full bg-blue-600 hover:bg-blue-500 text-white font-black py-4 rounded-2xl shadow-lg shadow-blue-600/30 transition-all active:scale-[0.98] uppercase tracking-widest text-sm">
+                    Authenticate
+                </button>
+            </form>
+
+            <div class="mt-10 text-center border-t border-slate-800 pt-8">
+                <div class="flex items-center justify-center space-x-2">
+                    <span class="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></span>
+                    <p class="text-[9px] text-slate-500 font-bold uppercase tracking-widest">Authorized Personnel Port 8080</p>
+                </div>
+            </div>
         </div>
         
-        <?php if($error): ?>
-            <div class="alert alert-danger py-2 small text-center fw-bold border-0 bg-danger bg-opacity-25 text-danger-emphasis mb-4">
-                <?= $error ?>
-            </div>
-        <?php endif; ?>
-
-        <form method="POST">
-            <div class="mb-3">
-                <label class="small text-muted mb-1 fw-bold">USERNAME</label>
-                <input type="text" name="username" class="form-control form-control-lg" required autofocus autocomplete="off">
-            </div>
-            <div class="mb-4">
-                <label class="small text-muted mb-1 fw-bold">PASSWORD</label>
-                <input type="password" name="password" class="form-control form-control-lg" required>
-            </div>
-            <button type="submit" class="btn btn-neon w-100 py-3 rounded-2">AUTHENTICATE</button>
-        </form>
-        
-        <div class="mt-4 text-center">
-            <small class="text-muted" style="font-size: 0.7rem;">SECURE SYSTEM • AUTHORIZED PERSONNEL ONLY</small>
-        </div>
+        <p class="text-center mt-6 text-[10px] text-slate-600 font-bold uppercase tracking-tighter">
+            Encrypted Session &bull; IP Logged &bull; SURO Networks v3.0
+        </p>
     </div>
 
 </body>

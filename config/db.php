@@ -1,9 +1,9 @@
 <?php
 // Admin Portal Database Configuration
 $host = 'localhost';
-$db   = 'zmmlpszw_suropara';
-$user = 'zmmlpszw_suropara_usr';
-$pass = '@fekgygn85cCM43'; // Set your password
+$db   = 'suro';
+$user = 'root';
+$pass = 'Stephan2k03'; // Set your password
 $charset = 'utf8mb4';
 
 $dsn = "mysql:host=$host;dbname=$db;charset=$charset";

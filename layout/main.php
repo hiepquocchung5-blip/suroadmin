@@ -1,183 +1,222 @@
 <?php
-// Admin Layout Wrapper (v3.0 - Complete)
+/**
+ * Advanced Admin Panel Layout - Main Wrapper
+ * Optimized for Security, Database Connectivity, and Modern UI/UX.
+ */
+
+// Core Requirements
 require_once __DIR__ . '/../config/db.php';
 require_once __DIR__ . '/../includes/functions.php';
 
-// Strict Auth Check
+// Strict Auth Check - Ensure only authorized admins can access
 requireAuth();
 
-// Safe Session Access (Prevent Undefined Index Warnings)
+// Safe Session Access
 $adminUser = $_SESSION['admin_username'] ?? 'Admin';
 $adminRole = $_SESSION['admin_role'] ?? 'STAFF';
 
-// Determine relative path depth to assets
-// This assumes layout/main.php is included by files in /modules/xyz/
-$pathDepth = substr_count($_SERVER['PHP_SELF'], '/') - 2; 
-// Logic: if in /admin/modules/dashboard/index.php (depth 4), we need ../../ to reach /admin/
-// But for simplicity in this flat prototype structure, we assume we are usually 2 levels deep from root admin.
-// Links below use hardcoded relative paths typical for this structure (../../)
+// Security: Headers
+header("X-Frame-Options: SAMEORIGIN");
+header("X-XSS-Protection: 1; mode=block");
+header("X-Content-Type-Options: nosniff");
 
-// Fetch System Status (Mock or DB)
-$systemStatus = 1; 
+// CSRF Token Management
+if (empty($_SESSION['csrf_token'])) {
+    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+}
+
+// Module Detection
+$current_module = $_GET['module'] ?? 'dashboard';
+
+// Path Handling Logic - SAFE VERSION
+// Logic: Ensure depth is never negative to prevent str_repeat errors
+$pathDepth = max(0, substr_count($_SERVER['PHP_SELF'], '/') - 2); 
+$baseUrl = str_repeat('../', $pathDepth);
 ?>
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="h-full bg-[#f8fafc]">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><?= $pageTitle ?? 'Admin Portal' ?> - Suropara</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-sRIl4kxILFvY47J16cr9ZwB07vP4J8+LH7qKQnuqkuIAvNWLzeN8tE5YBujZqJLB" crossorigin="anonymous">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>SURO Admin | <?php echo strtoupper($current_module); ?></title>
+    
+    <!-- Security: CSRF Token for JS -->
+    <meta name="csrf-token" content="<?php echo $_SESSION['csrf_token']; ?>">
+    
+    <!-- UI Assets -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    
     <style>
-        :root { --sidebar-width: 260px; --header-height: 70px; --bg-dark: #0f172a; --bg-card: #1e293b; --neon: #00f3ff; }
-        body { background-color: var(--bg-dark); min-height: 100vh; overflow-x: hidden; font-family: 'Segoe UI', sans-serif; color: #e2e8f0; }
+        body { font-family: 'Plus Jakarta Sans', sans-serif; }
         
-        /* Layout Transitions */
-        .sidebar { width: var(--sidebar-width); position: fixed; top: 0; left: 0; height: 100%; background: var(--bg-card); border-right: 1px solid #334155; z-index: 1000; transition: margin-left 0.3s ease; }
-        .sidebar.collapsed { margin-left: calc(var(--sidebar-width) * -1); }
+        /* Glassmorphism & Custom Effects */
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+        }
         
-        .main-wrapper { margin-left: var(--sidebar-width); transition: margin-left 0.3s ease; }
-        .main-wrapper.expanded { margin-left: 0; }
+        .sidebar-collapsed { width: 80px !important; }
+        .sidebar-collapsed span, .sidebar-collapsed .nav-label { display: none; }
+        .sidebar-collapsed .nav-group-title { opacity: 0; }
         
-        /* Navigation Links */
-        .nav-link { color: #94a3b8; padding: 12px 25px; display: flex; align-items: center; gap: 12px; font-weight: 500; transition: all 0.2s; border-left: 3px solid transparent; }
-        .nav-link:hover { color: #fff; background: rgba(255,255,255,0.05); }
-        .nav-link.active { color: var(--neon); background: rgba(0, 243, 255, 0.05); border-left-color: var(--neon); }
-        .nav-link i { font-size: 1.1rem; }
-        
-        /* UI Components */
-        .card { background: var(--bg-card); border: 1px solid #334155; color: #fff; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); }
-        .text-neon { color: var(--neon); }
-        .btn-toggle { color: var(--neon); background: transparent; border: 1px solid rgba(0, 243, 255, 0.3); }
-        
-        /* Mobile overrides */
-        @media (max-width: 768px) {
-            .sidebar { margin-left: calc(var(--sidebar-width) * -1); }
-            .sidebar.collapsed { margin-left: 0; } /* Invert logic for mobile if needed, or stick to desktop-first */
-            .main-wrapper { margin-left: 0; }
+        .nav-item-active {
+            background: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%);
+            color: white !important;
+            box-shadow: 0 10px 15px -3px rgba(37, 99, 235, 0.25);
+        }
+
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }
+
+        @keyframes pulse-ring {
+            0% { transform: scale(.33); opacity: 1; }
+            80%, 100% { opacity: 0; }
+        }
+        .status-pulse {
+            position: relative;
+        }
+        .status-pulse:before {
+            content: '';
+            position: absolute;
+            width: 100%; height: 100%;
+            background-color: #10b981;
+            border-radius: 50%;
+            animation: pulse-ring 1.5s cubic-bezier(0.455, 0.03, 0.515, 0.955) infinite;
         }
     </style>
 </head>
-<body>
+<body class="h-full overflow-hidden antialiased text-slate-900">
 
-<!-- SIDEBAR -->
-<div class="sidebar" id="sidebar">
-    <div class="d-flex align-items-center justify-content-center" style="height: var(--header-height); border-bottom: 1px solid #334155;">
-        <h4 class="m-0 text-neon fw-black tracking-widest">SUROPARA</h4>
-    </div>
-    
-    <div class="nav flex-column py-3" style="height: calc(100vh - 70px); overflow-y: auto;">
-        <!-- MAIN -->
-        <small class="text-uppercase text-muted fw-bold px-4 mb-2 mt-2" style="font-size: 0.7rem;">Main Menu</small>
-        <a href="../../modules/dashboard/index.php" class="nav-link <?= strpos($_SERVER['PHP_SELF'], 'dashboard/index') ? 'active' : '' ?>">
-            <i class="bi bi-grid-1x2-fill"></i> Dashboard
-        </a>
-        <a href="../../modules/dashboard/live.php" class="nav-link <?= strpos($_SERVER['PHP_SELF'], 'dashboard/live') ? 'active' : '' ?>">
-            <i class="bi bi-activity"></i> Live Monitor
-        </a>
-        <a href="../../modules/finance/queue.php" class="nav-link <?= strpos($_SERVER['PHP_SELF'], 'finance') ? 'active' : '' ?>">
-            <i class="bi bi-wallet2"></i> Finance Queue
-        </a>
-        
-        <!-- GAME -->
-        <small class="text-uppercase text-muted fw-bold px-4 mt-3 mb-2" style="font-size: 0.7rem;">Game Management</small>
-        <a href="../../modules/users/list.php" class="nav-link <?= strpos($_SERVER['PHP_SELF'], 'users') ? 'active' : '' ?>">
-            <i class="bi bi-people-fill"></i> Players
-        </a>
-        <a href="../../modules/machines/monitor.php" class="nav-link <?= strpos($_SERVER['PHP_SELF'], 'machines/monitor') ? 'active' : '' ?>">
-            <i class="bi bi-joystick"></i> Game Floor
-        </a>
-        <a href="../../modules/machines/manage.php" class="nav-link <?= strpos($_SERVER['PHP_SELF'], 'machines/manage') ? 'active' : '' ?>">
-            <i class="bi bi-box-seam"></i> Machine Inventory
-        </a>
-        <a href="../../modules/machines/heatmap.php" class="nav-link <?= strpos($_SERVER['PHP_SELF'], 'heatmap') ? 'active' : '' ?>">
-            <i class="bi bi-thermometer-high"></i> Floor Heatmap
-        </a>
-        
-        <!-- CONTENT -->
-        <small class="text-uppercase text-muted fw-bold px-4 mt-3 mb-2" style="font-size: 0.7rem;">Content & World</small>
-        <a href="../../modules/islands/index.php" class="nav-link <?= strpos($_SERVER['PHP_SELF'], 'islands') ? 'active' : '' ?>">
-            <i class="bi bi-map-fill"></i> Islands & RTP
-        </a>
-        <a href="../../modules/characters/index.php" class="nav-link <?= strpos($_SERVER['PHP_SELF'], 'characters') ? 'active' : '' ?>">
-            <i class="bi bi-person-hearts"></i> Characters
-        </a>
-        <a href="../../modules/marketing/jackpots.php" class="nav-link <?= strpos($_SERVER['PHP_SELF'], 'jackpots') ? 'active' : '' ?>">
-            <i class="bi bi-trophy-fill"></i> Jackpots
-        </a>
-        <a href="../../modules/marketing/events.php" class="nav-link <?= strpos($_SERVER['PHP_SELF'], 'events') ? 'active' : '' ?>">
-            <i class="bi bi-calendar-event"></i> Events
-        </a>
-
-        <!-- SYSTEM -->
-        <small class="text-uppercase text-muted fw-bold px-4 mt-3 mb-2" style="font-size: 0.7rem;">System</small>
-        <a href="../../modules/settings/global.php" class="nav-link <?= strpos($_SERVER['PHP_SELF'], 'settings') ? 'active' : '' ?>">
-            <i class="bi bi-sliders"></i> Global Config
-        </a>
-        <a href="../../modules/finance_config/methods.php" class="nav-link <?= strpos($_SERVER['PHP_SELF'], 'finance_config/methods') ? 'active' : '' ?>">
-            <i class="bi bi-bank"></i> Payment Methods
-        </a>
-         <a href="../../modules/finance_config/limits.php" class="nav-link <?= strpos($_SERVER['PHP_SELF'], 'finance_config/limits') ? 'active' : '' ?>">
-            <i class="bi bi-graph-up-arrow"></i> Withdrawal Limits
-        </a>
-        <a href="../../modules/staff/manage.php" class="nav-link <?= strpos($_SERVER['PHP_SELF'], 'staff') ? 'active' : '' ?>">
-            <i class="bi bi-shield-lock-fill"></i> Staff Access
-        </a>
-    </div>
-</div>
-
-<!-- MAIN CONTENT WRAPPER -->
-<div class="main-wrapper" id="mainWrapper">
-    
-    <!-- TOP HEADER -->
-    <div class="px-4 py-3 d-flex justify-content-between align-items-center" style="height: var(--header-height); background: rgba(30, 41, 59, 0.95); border-bottom: 1px solid #334155; position: sticky; top: 0; z-index: 999;">
-        
-        <div class="d-flex align-items-center gap-3">
-            <button class="btn btn-sm btn-outline-secondary border-0" id="sidebarToggle" onclick="toggleSidebar()">
-                <i class="bi bi-list fs-4"></i>
-            </button>
-            <h5 class="m-0 text-white fw-bold d-none d-md-block"><?= $pageTitle ?? 'Admin Portal' ?></h5>
+<div class="flex h-screen overflow-hidden">
+    <!-- Desktop Sidebar -->
+    <aside id="desktop-sidebar" class="hidden lg:flex flex-col w-72 bg-[#0f172a] text-slate-400 transition-all duration-300 ease-in-out border-r border-white/5 relative z-50">
+        <!-- Logo Area -->
+        <div class="h-20 flex items-center px-6 border-b border-white/5 flex-shrink-0">
+            <div class="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center mr-3 shadow-lg shadow-blue-600/20">
+                <i data-lucide="shield-check" class="w-6 h-6 text-white"></i>
+            </div>
+            <span class="text-lg font-extrabold text-white tracking-tight uppercase nav-label">Suro <span class="text-blue-500">Panel</span></span>
         </div>
 
-        <div class="d-flex align-items-center gap-4">
-            
-            <!-- SYSTEM STATUS INDICATOR -->
-            <div class="d-flex align-items-center gap-2 bg-dark px-3 py-1 rounded-pill border border-secondary">
-                <span class="badge bg-success rounded-circle p-1"><span class="visually-hidden">Online</span></span>
-                <span class="text-white small fw-bold" style="font-size: 0.75rem; letter-spacing: 1px;">SYSTEM LIVE</span>
-            </div>
-
-            <div class="vr text-secondary h-50"></div>
-
-            <!-- ADMIN PROFILE -->
-            <div class="dropdown">
-                <a href="#" class="d-flex align-items-center text-decoration-none dropdown-toggle" data-bs-toggle="dropdown">
-                    <div class="bg-gradient text-white rounded-circle d-flex align-items-center justify-content-center me-2 fw-bold" style="width: 35px; height: 35px; background: linear-gradient(45deg, #00f3ff, #0066ff);">
-                        <?= strtoupper(substr($adminUser, 0, 1)) ?>
-                    </div>
-                    <div class="d-none d-md-block text-end me-1">
-                        <div class="text-white small fw-bold" style="line-height: 1;"><?= htmlspecialchars($adminUser) ?></div>
-                        <div class="text-neon" style="font-size: 0.65rem;"><?= htmlspecialchars($adminRole) ?></div>
-                    </div>
+        <!-- Navigation -->
+        <nav class="flex-1 px-4 py-6 space-y-8 overflow-y-auto custom-scrollbar">
+            <!-- Group 1: Monitoring -->
+            <div class="space-y-1">
+                <p class="px-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-4 nav-group-title transition-opacity">Main Dashboard</p>
+                <a href="index.php?module=dashboard" class="flex items-center px-4 py-3 rounded-xl hover:bg-white/5 hover:text-white transition-all <?php echo $current_module == 'dashboard' ? 'nav-item-active' : ''; ?>">
+                    <i data-lucide="layout-grid" class="w-5 h-5 mr-3"></i>
+                    <span class="font-semibold text-sm">Overview</span>
                 </a>
-                <ul class="dropdown-menu dropdown-menu-dark dropdown-menu-end shadow-lg border-secondary mt-2">
-                    <li><h6 class="dropdown-header">Logged in as <?= htmlspecialchars($adminUser) ?></h6></li>
-                    <li><a class="dropdown-item" href="../../modules/staff/logs.php"><i class="bi bi-activity me-2"></i> Audit Logs</a></li>
-                    <li><a class="dropdown-item" href="../../modules/finance/reports.php"><i class="bi bi-file-earmark-bar-graph me-2"></i> Reports</a></li>
-                    <li><hr class="dropdown-divider border-secondary"></li>
-                    <li><a class="dropdown-item text-danger" href="../../index.php?logout=true"><i class="bi bi-box-arrow-right me-2"></i> Logout</a></li>
-                </ul>
+                <a href="index.php?module=live" class="flex items-center px-4 py-3 rounded-xl hover:bg-white/5 hover:text-white transition-all <?php echo $current_module == 'live' ? 'nav-item-active' : ''; ?>">
+                    <i data-lucide="activity" class="w-5 h-5 mr-3"></i>
+                    <span class="font-semibold text-sm">Live Traffic</span>
+                </a>
             </div>
+
+            <!-- Group 2: Management -->
+            <div class="space-y-1">
+                <p class="px-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-4 nav-group-title transition-opacity">Economics</p>
+                <a href="index.php?module=users" class="flex items-center px-4 py-3 rounded-xl hover:bg-white/5 hover:text-white transition-all <?php echo $current_module == 'users' ? 'nav-item-active' : ''; ?>">
+                    <i data-lucide="users" class="w-5 h-5 mr-3"></i>
+                    <span class="font-semibold text-sm">Users</span>
+                </a>
+                <a href="index.php?module=finance" class="flex items-center px-4 py-3 rounded-xl hover:bg-white/5 hover:text-white transition-all <?php echo $current_module == 'finance' ? 'nav-item-active' : ''; ?>">
+                    <i data-lucide="landmark" class="w-5 h-5 mr-3"></i>
+                    <span class="font-semibold text-sm">Finance Queue</span>
+                </a>
+                <a href="index.php?module=machines" class="flex items-center px-4 py-3 rounded-xl hover:bg-white/5 hover:text-white transition-all <?php echo $current_module == 'machines' ? 'nav-item-active' : ''; ?>">
+                    <i data-lucide="cpu" class="w-5 h-5 mr-3"></i>
+                    <span class="font-semibold text-sm">Machines</span>
+                </a>
+            </div>
+
+            <!-- Group 3: System -->
+            <div class="space-y-1">
+                <p class="px-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-4 nav-group-title transition-opacity">System</p>
+                <a href="index.php?module=settings" class="flex items-center px-4 py-3 rounded-xl hover:bg-white/5 hover:text-white transition-all <?php echo $current_module == 'settings' ? 'nav-item-active' : ''; ?>">
+                    <i data-lucide="settings-2" class="w-5 h-5 mr-3"></i>
+                    <span class="font-semibold text-sm">Global Config</span>
+                </a>
+                <a href="index.php?module=security" class="flex items-center px-4 py-3 rounded-xl hover:bg-white/5 hover:text-white transition-all <?php echo $current_module == 'security' ? 'nav-item-active' : ''; ?>">
+                    <i data-lucide="lock" class="w-5 h-5 mr-3"></i>
+                    <span class="font-semibold text-sm">Security Hub</span>
+                </a>
+            </div>
+        </nav>
+
+        <!-- Sidebar Footer -->
+        <div class="p-4 border-t border-white/5 bg-black/20">
+            <div class="flex items-center p-3 space-x-3 bg-white/5 rounded-2xl mb-4 nav-label">
+                <div class="w-8 h-8 rounded-lg bg-indigo-500/20 flex items-center justify-center text-indigo-400">
+                    <i data-lucide="user" class="w-4 h-4"></i>
+                </div>
+                <div class="overflow-hidden">
+                    <p class="text-xs font-bold text-white truncate"><?php echo htmlspecialchars($adminUser); ?></p>
+                    <p class="text-[10px] text-slate-500 font-bold"><?php echo $adminRole; ?></p>
+                </div>
+            </div>
+            <button onclick="toggleSidebarCollapse()" class="w-full flex items-center justify-center py-2 text-slate-500 hover:text-white transition-colors">
+                <i id="collapse-icon" data-lucide="chevron-left" class="w-5 h-5"></i>
+            </button>
         </div>
-    </div>
+    </aside>
 
-    <!-- PAGE CONTENT START -->
-    <div class="p-4">
+    <!-- Mobile Drawer -->
+    <div id="mobile-sidebar-backdrop" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[60] hidden lg:hidden" onclick="toggleMobileMenu()"></div>
+    <aside id="mobile-sidebar" class="fixed top-0 left-0 bottom-0 w-72 bg-[#0f172a] z-[70] transform -translate-x-full transition-transform duration-300 lg:hidden flex flex-col">
+        <div class="p-6 flex items-center justify-between border-b border-white/5">
+            <span class="text-xl font-black text-white uppercase tracking-tighter">SURO <span class="text-blue-500">ADMIN</span></span>
+            <button onclick="toggleMobileMenu()" class="text-slate-400"><i data-lucide="x" class="w-6 h-6"></i></button>
+        </div>
+        <div id="mobile-nav-content" class="flex-1 overflow-y-auto p-4">
+            <!-- Content will be mirrored from desktop via JS -->
+        </div>
+    </aside>
 
-    <!-- Sidebar Toggle Script -->
-    <script>
-        function toggleSidebar() {
-            document.getElementById('sidebar').classList.toggle('collapsed');
-            document.getElementById('mainWrapper').classList.toggle('expanded');
-        }
-    </script>
+    <!-- Content Area -->
+    <main class="flex-1 flex flex-col overflow-hidden">
+        <!-- Main Header -->
+        <header class="h-20 glass-panel border-b border-slate-200/60 flex items-center justify-between px-6 md:px-10 flex-shrink-0 z-40">
+            <div class="flex items-center space-x-4">
+                <button onclick="toggleMobileMenu()" class="lg:hidden p-2.5 text-slate-600 bg-white border border-slate-200 rounded-xl shadow-sm">
+                    <i data-lucide="menu" class="w-5 h-5"></i>
+                </button>
+                
+                <div class="hidden md:flex flex-col">
+                    <h2 class="text-lg font-extrabold text-slate-800 leading-none"><?php echo strtoupper($current_module); ?></h2>
+                    <div class="flex items-center mt-1.5 space-x-2">
+                        <div class="w-2 h-2 rounded-full bg-emerald-500 status-pulse"></div>
+                        <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Network Secure</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Action Bar -->
+            <div class="flex items-center space-x-3 sm:space-x-6">
+                <!-- Search & Alerts (Visual only) -->
+                <div class="hidden sm:flex items-center space-x-2 bg-slate-100/80 p-1.5 rounded-2xl border border-slate-200/50">
+                    <button class="p-2 text-slate-400 hover:text-blue-600 transition-colors"><i data-lucide="search" class="w-5 h-5"></i></button>
+                    <button class="p-2 text-slate-400 hover:text-blue-600 transition-colors relative">
+                        <i data-lucide="bell" class="w-5 h-5"></i>
+                        <span class="absolute top-2 right-2.5 w-2 h-2 bg-red-500 rounded-full border-2 border-white"></span>
+                    </button>
+                </div>
+
+                <!-- Profile Dropdown Placeholder -->
+                <div class="flex items-center space-x-3 pl-4 border-l border-slate-200">
+                    <div class="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-700 p-[2px] shadow-lg shadow-blue-200">
+                        <div class="w-full h-full bg-white rounded-[14px] flex items-center justify-center font-black text-blue-600">
+                            <?php echo strtoupper(substr($adminUser, 0, 2)); ?>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Content Container -->
+        <div id="content-container" class="flex-1 overflow-y-auto p-4 md:p-10 custom-scrollbar bg-[#f8fafc]">
+            <div class="max-w-7xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
