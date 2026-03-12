@@ -72,7 +72,7 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
     <div class="row g-4">
         <div class="col-md-4">
             <div class="glass-card p-0 border-info border-opacity-50 shadow-[0_0_30px_rgba(13,202,240,0.1)]">
-                <div class="bg-info bg-opacity-20 text-info fw-black p-3 border-bottom border-info border-opacity-30 tracking-widest italic">
+                <div class="bg-info bg-opacity-20 text-info fw-black p-3 border-b border-info border-opacity-30 tracking-widest italic">
                     <i class="bi bi-person-plus-fill me-2"></i> PROMOTE PLAYER
                 </div>
                 <div class="card-body p-4 bg-black bg-opacity-60">
@@ -93,7 +93,7 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
 
         <div class="col-md-8">
             <div class="glass-card p-0 border-secondary overflow-hidden">
-                <div class="card-header bg-black bg-opacity-50 border-bottom border-white border-opacity-10 text-white fw-bold tracking-widest italic p-3">
+                <div class="card-header bg-black bg-opacity-50 border-b border-white border-opacity-10 text-white fw-bold tracking-widest italic p-3">
                     <i class="bi bi-star-fill text-yellow-400 me-2"></i> MASTER ROSTER
                 </div>
                 <div class="table-responsive bg-black bg-opacity-40">
@@ -116,13 +116,14 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
                                 </td>
                                 <td class="text-center">
                                     <span class="badge bg-purple-900 bg-opacity-50 text-purple-400 border border-purple-500 rounded-pill px-3 shadow-[0_0_10px_purple] animate-pulse">
-                                        <i class="bi bi-people-fill me-1"></i> <?= number_format($a['total_referrals']) ?>
+                                        <i class="bi bi-people-fill me-1"></i> <?= number_format((float)$a['total_referrals']) ?>
                                     </span>
                                 </td>
-                                <td class="text-end text-yellow-400 fw-bold"><?= number_format($a['balance']) ?></td>
+                                <!-- FIXED: Cast to (float) to prevent null errors -->
+                                <td class="text-end text-yellow-400 fw-bold"><?= number_format((float)$a['balance']) ?></td>
                                 <td class="text-end">
-                                    <div class="text-green-400 fw-black text-lg lh-1"><?= number_format($a['commission_balance']) ?></div>
-                                    <div class="text-[9px] text-gray-500 uppercase mt-1">Life: <?= number_format($a['lifetime_earnings']) ?></div>
+                                    <div class="text-green-400 fw-black text-lg lh-1"><?= number_format((float)$a['commission_balance']) ?></div>
+                                    <div class="text-[9px] text-gray-500 uppercase mt-1">Life: <?= number_format((float)$a['lifetime_earnings']) ?></div>
                                 </td>
                                 <td class="text-end pe-4">
                                     <form method="POST" onsubmit="return confirm('Revoke Agent Status from <?= htmlspecialchars($a['username']) ?>?');">
