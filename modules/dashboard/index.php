@@ -90,7 +90,7 @@ $leaderboard = $pdo->query("
 $activeStaff = $pdo->query("SELECT username, role FROM admin_users WHERE last_login > DATE_SUB(NOW(), INTERVAL 5 MINUTE)")->fetchAll();
 
 // Banks
-$banks = $pdo->query("SELECT provider_name, logo_url, is_active FROM payment_providers ORDER BY provider_name")->fetchAll();
+$banks = $pdo->query("SELECT provider_name, logo_url, is_active FROM payment_methods ORDER BY provider_name")->fetchAll();
 
 ?>
 
