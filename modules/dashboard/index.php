@@ -56,6 +56,42 @@ $riskCount = $pdo->query("
     AND TIMESTAMPDIFF(MINUTE, t1.created_at, t2.created_at) <= 10
 ")->fetchColumn();
 
+// Personal Metrics
+if (isset($_SESSION['admin_id'])) {
+    $stmt = $pdo->prepare("
+        SELECT 
+            COUNT(*) as count,
+            COALESCE(SUM(CASE WHEN type='deposit' THEN amount ELSE 0 END), 0) as vol_in,
+            COALESCE(SUM(CASE WHEN type='withdraw' THEN amount ELSE 0 END), 0) as vol_out
+        FROM transactions 
+        WHERE processed_by = ? AND DATE(created_at) = CURDATE()
+    ");
+    $stmt->execute([$_SESSION['admin_id']]);
+    $myMetrics = $stmt->fetch();
+} else {
+    $myMetrics = ['count' => 0, 'vol_in' => 0, 'vol_out' => 0];
+}
+
+// Pending Transactions
+$pendingDep = $pdo->query("SELECT COUNT(*) FROM transactions WHERE type='deposit' AND status='pending'")->fetchColumn() ?: 0;
+$pendingWith = $pdo->query("SELECT COUNT(*) FROM transactions WHERE type='withdraw' AND status='pending'")->fetchColumn() ?: 0;
+
+// Leaderboard
+$leaderboard = $pdo->query("
+    SELECT a.username, COUNT(t.id) as processed_count
+    FROM admin_users a
+    LEFT JOIN transactions t ON t.processed_by = a.id AND DATE(t.created_at) = CURDATE()
+    GROUP BY a.id, a.username
+    ORDER BY processed_count DESC
+    LIMIT 5
+")->fetchAll();
+
+// Active Staff
+$activeStaff = $pdo->query("SELECT username, role FROM admin_users WHERE last_active > DATE_SUB(NOW(), INTERVAL 5 MINUTE)")->fetchAll();
+
+// Banks
+$banks = $pdo->query("SELECT provider_name, logo_url, is_active FROM payment_providers ORDER BY provider_name")->fetchAll();
+
 ?>
 
 <!-- Sakura Particles Integration -->
