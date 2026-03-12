@@ -1,185 +1,141 @@
 <?php
 /**
- * Suropara Admin Portal - Login Entry Point (v3.0)
- * Handles authentication, session initiation, and logout.
+ * Suropara Admin V2 - Front Controller & Router
+ * Hides raw file paths and handles global routing.
  */
+session_start();
+require_once __DIR__ . '/config/db.php';
+require_once __DIR__ . '/includes/functions.php';
 
-// 1. Load Database Configuration
-require_once 'config/db.php';
-
-// 2. Load Helper Functions (if available, otherwise define basic input cleaning)
-if (file_exists('includes/functions.php')) {
-    require_once 'includes/functions.php';
-} else {
-    // Fallback if functions.php isn't loaded yet
-    function cleanInput($data) {
-        return htmlspecialchars(stripslashes(trim($data)));
-    }
-}
-
-// 3. Handle Logout Request
+// 1. Handle Logout
 if (isset($_GET['logout'])) {
-    // Completely destroy session
     session_unset();
     session_destroy();
-    // Redirect to self to clear query params
     header("Location: index.php");
     exit;
 }
 
-// 4. Redirect if Already Logged In
-if (isset($_SESSION['admin_id']) && isset($_SESSION['admin_role']) && isset($_SESSION['admin_username'])) {
-    header("Location: modules/dashboard/index.php");
-    exit;
-}
-
-$error = '';
-
-// 5. Handle Login Submission
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+// 2. Handle Login Submission
+$loginError = '';
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login_submit'])) {
     $username = cleanInput($_POST['username'] ?? '');
     $password = $_POST['password'] ?? '';
 
-    if (empty($username) || empty($password)) {
-        $error = "Please enter both username and password.";
-    } else {
-        try {
-            // Fetch Admin User (Must be Active)
-            $stmt = $pdo->prepare("SELECT * FROM admin_users WHERE username = ? AND is_active = 1");
-            $stmt->execute([$username]);
-            $admin = $stmt->fetch();
+    if (!empty($username) && !empty($password)) {
+        $stmt = $pdo->prepare("SELECT * FROM admin_users WHERE username = ? AND is_active = 1");
+        $stmt->execute([$username]);
+        $admin = $stmt->fetch();
 
-            // Verify Password
-            if ($admin && password_verify($password, $admin['password_hash'])) {
-                // Security: Regenerate Session ID to prevent Session Fixation attacks
-                session_regenerate_id(true);
-
-                // Set Critical Session Variables
-                $_SESSION['admin_id'] = $admin['id'];
-                $_SESSION['admin_username'] = $admin['username'];
-                $_SESSION['admin_role'] = $admin['role'];
-                $_SESSION['login_time'] = time();
-
-                // Update Last Login Timestamp in DB
-                $pdo->prepare("UPDATE admin_users SET last_login = NOW() WHERE id = ?")->execute([$admin['id']]);
-                
-                // Audit Log (Optional, if audit_logs table exists)
-                try {
-                    $pdo->prepare("INSERT INTO audit_logs (admin_id, action, target_table) VALUES (?, 'LOGIN', 'auth')")->execute([$admin['id']]);
-                } catch (Exception $e) { /* Ignore audit error on login */ }
-
-                // Redirect to Dashboard
-                header("Location: modules/dashboard/index.php");
-                exit;
-            } else {
-                $error = "Invalid Credentials or Account Suspended";
-            }
-        } catch (PDOException $e) {
-            $error = "System Error: Database connection failed.";
-            // error_log($e->getMessage()); // Log internal error
+        if ($admin && password_verify($password, $admin['password_hash'])) {
+            session_regenerate_id(true);
+            $_SESSION['admin_id'] = $admin['id'];
+            $_SESSION['admin_username'] = $admin['username'];
+            $_SESSION['admin_role'] = $admin['role'];
+            
+            $pdo->prepare("UPDATE admin_users SET last_login = NOW() WHERE id = ?")->execute([$admin['id']]);
+            header("Location: index.php?route=dashboard");
+            exit;
+        } else {
+            $loginError = "Invalid Credentials or Account Suspended.";
         }
+    } else {
+        $loginError = "Please enter all fields.";
     }
 }
+
+// 3. Render Login View if not authenticated
+if (!isset($_SESSION['admin_id'])) {
+    ?>
+    <!DOCTYPE html>
+    <html lang="en" data-bs-theme="dark">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Suropara V2 - God Access</title>
+        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+        <style>
+            body { background: #050505; height: 100vh; display: flex; align-items: center; justify-content: center; font-family: 'Inter', sans-serif; overflow: hidden; }
+            .bg-grid { position: absolute; inset: 0; background-image: linear-gradient(rgba(0, 243, 255, 0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(0, 243, 255, 0.05) 1px, transparent 1px); background-size: 30px 30px; pointer-events: none; }
+            .login-card { background: rgba(15, 23, 42, 0.7); backdrop-filter: blur(20px); border: 1px solid rgba(0, 243, 255, 0.2); width: 100%; max-width: 400px; border-radius: 20px; box-shadow: 0 0 50px rgba(0, 243, 255, 0.1); z-index: 10; }
+        </style>
+    </head>
+    <body>
+        <div class="bg-grid"></div>
+        <div class="login-card p-5">
+            <div class="text-center mb-5">
+                <h2 class="text-info fw-black tracking-widest mb-1" style="letter-spacing: 4px;">SUROPARA</h2>
+                <div class="badge bg-info text-dark fw-bold px-3 py-1 mt-2">SYSTEM ACCESS V2</div>
+            </div>
+            
+            <?php if($loginError): ?>
+                <div class="alert bg-danger bg-opacity-25 text-danger border-danger text-center fw-bold small"><?= $loginError ?></div>
+            <?php endif; ?>
+
+            <form method="POST">
+                <input type="hidden" name="login_submit" value="1">
+                <div class="mb-3">
+                    <input type="text" name="username" class="form-control bg-dark border-secondary text-white py-3" placeholder="Admin ID" required autocomplete="off">
+                </div>
+                <div class="mb-4">
+                    <input type="password" name="password" class="form-control bg-dark border-secondary text-white py-3" placeholder="Secure Key" required>
+                </div>
+                <button type="submit" class="btn btn-info w-100 fw-black py-3 text-dark shadow-lg">ESTABLISH LINK</button>
+            </form>
+        </div>
+    </body>
+    </html>
+    <?php
+    exit;
+}
+
+// 4. Central Routing Engine
+$route = $_GET['route'] ?? 'dashboard';
+
+// Map friendly URLs to actual file paths
+$routes = [
+    'dashboard'         => 'modules/dashboard/index.php',
+    'live'              => 'modules/dashboard/live.php',
+    
+    'finance/queue'     => 'modules/finance/queue.php',
+    'finance/reports'   => 'modules/finance/reports.php',
+    'finance/export'    => 'modules/finance/export.php',
+    
+    'players/list'      => 'modules/users/list.php',
+    'players/details'   => 'modules/users/details.php',
+    'players/whales'    => 'modules/users/whales.php',
+    'players/agents'    => 'modules/users/agent.php',
+    
+    'fleet/monitor'     => 'modules/machines/monitor.php',
+    'fleet/manage'      => 'modules/machines/manage.php',
+    'fleet/heatmap'     => 'modules/machines/heatmap.php',
+    
+    'content/islands'   => 'modules/islands/index.php',
+    'content/chars'     => 'modules/characters/index.php',
+    'content/editor'    => 'modules/characters/editor.php',
+    
+    'marketing/events'  => 'modules/marketing/events.php',
+    'marketing/jackpots'=> 'modules/marketing/jackpots.php',
+    
+    'security/monitor'  => 'modules/security/index.php',
+    'social/chat'       => 'modules/social/chat.php',
+    
+    'config/global'     => 'modules/settings/global.php',
+    'config/methods'    => 'modules/finance_config/methods.php',
+    'config/limits'     => 'modules/finance_config/limits.php',
+    
+    'staff/manage'      => 'modules/staff/manage.php',
+    'staff/performance' => 'modules/staff/performance.php',
+    'staff/logs'        => 'modules/staff/logs.php',
+];
+
+if (array_key_exists($route, $routes)) {
+    $targetFile = __DIR__ . '/' . $routes[$route];
+    if (file_exists($targetFile)) {
+        require_once $targetFile;
+    } else {
+        echo "<h2>Module Not Found</h2><p>The file <code>{$routes[$route]}</code> is missing.</p>";
+    }
+} else {
+    echo "<h2>404 - Route Not Found</h2><p>The route <code>$route</code> is not registered.</p>";
+}
 ?>
-<!DOCTYPE html>
-<html lang="en" data-bs-theme="dark">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Suropara God Portal</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <style>
-        body { 
-            background: #0f172a; 
-            color: #fff; 
-            display: flex; 
-            align-items: center; 
-            justify-content: center; 
-            height: 100vh; 
-            font-family: 'Segoe UI', sans-serif;
-            overflow: hidden;
-        }
-        .login-card { 
-            background: #1e293b; 
-            border: 1px solid #334155; 
-            width: 100%; 
-            max-width: 400px; 
-            box-shadow: 0 20px 50px rgba(0,0,0,0.5); 
-            border-radius: 12px;
-            position: relative;
-            z-index: 10;
-        }
-        .btn-neon { 
-            background: #00f3ff; 
-            color: #000; 
-            font-weight: 800; 
-            border: none; 
-            transition: 0.3s; 
-            letter-spacing: 1px;
-        }
-        .btn-neon:hover { 
-            background: #00c4cf; 
-            box-shadow: 0 0 20px rgba(0, 243, 255, 0.4); 
-            transform: translateY(-2px); 
-        }
-        .form-control {
-            background-color: #0f172a;
-            border-color: #334155;
-            color: #fff;
-        }
-        .form-control:focus { 
-            background-color: #0f172a;
-            color: #fff; 
-            border-color: #00f3ff; 
-            box-shadow: 0 0 0 0.25rem rgba(0, 243, 255, 0.1); 
-        }
-        
-        /* Background FX */
-        .bg-glow {
-            position: absolute;
-            width: 600px;
-            height: 600px;
-            background: radial-gradient(circle, rgba(0,243,255,0.05) 0%, rgba(0,0,0,0) 70%);
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            z-index: 0;
-            pointer-events: none;
-        }
-    </style>
-</head>
-<body>
-
-    <div class="bg-glow"></div>
-
-    <div class="login-card p-5">
-        <div class="text-center mb-5">
-            <h2 class="text-info fw-black tracking-widest mb-1">SUROPARA</h2>
-            <p class="text-secondary small fw-bold letter-spacing-2 m-0" style="letter-spacing: 2px;">GOD MODE ACCESS</p>
-        </div>
-        
-        <?php if($error): ?>
-            <div class="alert alert-danger py-2 small text-center fw-bold border-0 bg-danger bg-opacity-25 text-danger-emphasis mb-4">
-                <?= $error ?>
-            </div>
-        <?php endif; ?>
-
-        <form method="POST">
-            <div class="mb-3">
-                <label class="small text-muted mb-1 fw-bold">USERNAME</label>
-                <input type="text" name="username" class="form-control form-control-lg" required autofocus autocomplete="off">
-            </div>
-            <div class="mb-4">
-                <label class="small text-muted mb-1 fw-bold">PASSWORD</label>
-                <input type="password" name="password" class="form-control form-control-lg" required>
-            </div>
-            <button type="submit" class="btn btn-neon w-100 py-3 rounded-2">AUTHENTICATE</button>
-        </form>
-        
-        <div class="mt-4 text-center">
-            <small class="text-muted" style="font-size: 0.7rem;">SECURE SYSTEM • AUTHORIZED PERSONNEL ONLY</small>
-        </div>
-    </div>
-
-</body>
-</html>
