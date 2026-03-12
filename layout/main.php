@@ -3,8 +3,8 @@
 if (!defined('__DIR__')) exit;
 $currentRoute = $_GET['route'] ?? 'dashboard';
 
-require_once ADMIN_BASE_PATH . '/config/db.php';
-require_once ADMIN_BASE_PATH . '/includes/functions.php';
+require_once 'DIR' . '/config/db.php';
+require_once 'DIR' . '/includes/functions.php';
 
 ?>
 <!DOCTYPE html>
