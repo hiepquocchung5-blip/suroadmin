@@ -64,7 +64,7 @@ if (isset($_SESSION['admin_id'])) {
             COALESCE(SUM(CASE WHEN type='deposit' THEN amount ELSE 0 END), 0) as vol_in,
             COALESCE(SUM(CASE WHEN type='withdraw' THEN amount ELSE 0 END), 0) as vol_out
         FROM transactions 
-        WHERE processed_by = ? AND DATE(created_at) = CURDATE()
+        WHERE processed_by_admin_id = ? AND DATE(created_at) = CURDATE()
     ");
     $stmt->execute([$_SESSION['admin_id']]);
     $myMetrics = $stmt->fetch();
