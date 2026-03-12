@@ -80,7 +80,7 @@ $pendingWith = $pdo->query("SELECT COUNT(*) FROM transactions WHERE type='withdr
 $leaderboard = $pdo->query("
     SELECT a.username, COUNT(t.id) as processed_count
     FROM admin_users a
-    LEFT JOIN transactions t ON t.processed_by = a.id AND DATE(t.created_at) = CURDATE()
+    LEFT JOIN transactions t ON t.processed_by_admin_id = a.id AND DATE(t.created_at) = CURDATE()
     GROUP BY a.id, a.username
     ORDER BY processed_count DESC
     LIMIT 5
