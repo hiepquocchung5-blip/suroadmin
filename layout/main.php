@@ -2,6 +2,10 @@
 // Prevent direct access to layout file
 if (!defined('__DIR__')) exit;
 $currentRoute = $_GET['route'] ?? 'dashboard';
+
+require_once ADMIN_BASE_PATH . '/config/db.php';
+require_once ADMIN_BASE_PATH . '/includes/functions.php';
+
 ?>
 <!DOCTYPE html>
 <html lang="en" data-bs-theme="dark">
