@@ -1,11 +1,11 @@
 <?php
+if (!defined('ADMIN_BASE_PATH')) exit('Direct access denied');
 $pageTitle = "Financial Queue";
-require_once '../../layout/main.php';
+require_once ADMIN_BASE_PATH . '/layout/main.php';
+requireRole(['GOD', 'FINANCE']);
 
 // Handle Actions (Approve/Reject)
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    requireRole(['GOD', 'FINANCE']);
-    
     $txId = (int)$_POST['tx_id'];
     $action = $_POST['action']; // 'approve' or 'reject'
     $note = cleanInput($_POST['note']);
@@ -13,8 +13,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     try {
         $pdo->beginTransaction();
-
-        // Get TX details with row lock
         $stmt = $pdo->prepare("SELECT * FROM transactions WHERE id = ? AND status = 'pending' FOR UPDATE");
         $stmt->execute([$txId]);
         $tx = $stmt->fetch();
@@ -22,232 +20,150 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($tx) {
             $newStatus = ($action === 'approve') ? 'approved' : 'rejected';
             
-            // Balance Logic
             if ($newStatus === 'approved' && $tx['type'] === 'deposit') {
                 $pdo->prepare("UPDATE users SET balance = balance + ? WHERE id = ?")->execute([$tx['amount'], $tx['user_id']]);
             } elseif ($newStatus === 'rejected' && $tx['type'] === 'withdraw') {
                 $pdo->prepare("UPDATE users SET balance = balance + ? WHERE id = ?")->execute([$tx['amount'], $tx['user_id']]);
             }
 
-            // Update Transaction
             $stmtUpd = $pdo->prepare("UPDATE transactions SET status = ?, processed_by_admin_id = ?, admin_note = ?, updated_at = NOW() WHERE id = ?");
             $stmtUpd->execute([$newStatus, $adminId, $note, $txId]);
-
-            // Audit
-            $pdo->prepare("INSERT INTO audit_logs (admin_id, action, target_table) VALUES (?, ?, 'transactions')")
-                ->execute([$adminId, ucfirst($action) . " Transaction #$txId"]);
+            $pdo->prepare("INSERT INTO audit_logs (admin_id, action, target_table) VALUES (?, ?, 'transactions')")->execute([$adminId, ucfirst($action) . " Transaction #$txId"]);
 
             $pdo->commit();
             $success = "Transaction #$txId processed successfully.";
-        } else {
-            $error = "Transaction #$txId not found or already processed.";
-        }
+        } else { $error = "Transaction #$txId not found or already processed."; }
     } catch (Exception $e) {
-        $pdo->rollBack();
+        if ($pdo->inTransaction()) $pdo->rollBack();
         $error = "Error processing transaction: " . $e->getMessage();
     }
 }
 
-// --- FILTERS & SEARCH ---
+// Fetch Pending
 $typeFilter = $_GET['type'] ?? 'all';
-$searchQuery = $_GET['q'] ?? '';
-
 $sql = "SELECT t.*, u.username, u.phone, u.balance as current_balance, u.level, pm.provider_name 
-        FROM transactions t 
-        JOIN users u ON t.user_id = u.id 
-        LEFT JOIN payment_methods pm ON t.payment_method_id = pm.id
+        FROM transactions t JOIN users u ON t.user_id = u.id LEFT JOIN payment_methods pm ON t.payment_method_id = pm.id
         WHERE t.status = 'pending'";
-
 $params = [];
-
-if ($typeFilter !== 'all') {
-    $sql .= " AND t.type = ?";
-    $params[] = $typeFilter;
-}
-
-if ($searchQuery) {
-    $sql .= " AND (u.username LIKE ? OR u.phone LIKE ? OR t.id = ?)";
-    $params[] = "%$searchQuery%";
-    $params[] = "%$searchQuery%";
-    $params[] = $searchQuery;
-}
-
+if ($typeFilter !== 'all') { $sql .= " AND t.type = ?"; $params[] = $typeFilter; }
 $sql .= " ORDER BY t.created_at ASC";
+$pending = $pdo->prepare($sql);
+$pending->execute($params);
+$pending = $pending->fetchAll();
 
-$stmt = $pdo->prepare($sql);
-$stmt->execute($params);
-$pending = $stmt->fetchAll();
-
-// Stats
-$totalPendingDeposit = 0;
-$totalPendingWithdraw = 0;
-foreach($pending as $p) {
-    if($p['type'] == 'deposit') $totalPendingDeposit += $p['amount'];
-    if($p['type'] == 'withdraw') $totalPendingWithdraw += $p['amount'];
-}
+// API Path logic for proofs
+$apiBase = defined('API_BASE_URL') ? rtrim(API_BASE_URL, '/') : '';
 ?>
 
-<!-- ALERTS -->
-<?php if(isset($success)): ?><div class="alert alert-success alert-dismissible fade show"><?= $success ?><button type="button" class="btn-close" data-bs-dismiss="alert"></button></div><?php endif; ?>
-<?php if(isset($error)): ?><div class="alert alert-danger alert-dismissible fade show"><?= $error ?><button type="button" class="btn-close" data-bs-dismiss="alert"></button></div><?php endif; ?>
-
-<!-- SUMMARY BAR -->
-<div class="row mb-4">
-    <div class="col-md-6">
-        <div class="card bg-dark border-success text-white h-100">
-            <div class="card-body d-flex justify-content-between align-items-center">
-                <div>
-                    <h6 class="text-success mb-0">PENDING DEPOSITS</h6>
-                    <small class="text-muted">Inbound Cash</small>
-                </div>
-                <h3 class="fw-bold mb-0 text-success">+<?= number_format($totalPendingDeposit) ?></h3>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-6">
-        <div class="card bg-dark border-danger text-white h-100">
-            <div class="card-body d-flex justify-content-between align-items-center">
-                <div>
-                    <h6 class="text-danger mb-0">PENDING WITHDRAWALS</h6>
-                    <small class="text-muted">Outbound Cash</small>
-                </div>
-                <h3 class="fw-bold mb-0 text-danger">-<?= number_format($totalPendingWithdraw) ?></h3>
-            </div>
-        </div>
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2 class="fw-black text-white italic tracking-widest m-0"><i class="bi bi-bank"></i> INBOX QUEUE</h2>
+    <div class="btn-group shadow-sm">
+        <a href="?route=finance/queue&type=all" class="btn <?= $typeFilter=='all'?'btn-info text-dark fw-bold':'btn-dark border-secondary text-muted' ?>">ALL</a>
+        <a href="?route=finance/queue&type=deposit" class="btn <?= $typeFilter=='deposit'?'btn-success fw-bold':'btn-dark border-secondary text-muted' ?>">DEPOSITS</a>
+        <a href="?route=finance/queue&type=withdraw" class="btn <?= $typeFilter=='withdraw'?'btn-danger fw-bold':'btn-dark border-secondary text-muted' ?>">PAYOUTS</a>
     </div>
 </div>
 
-<!-- CONTROLS -->
-<div class="card mb-3">
-    <div class="card-body py-2">
-        <form method="GET" class="row g-2 align-items-center">
-            <div class="col-auto">
-                <select name="type" class="form-select bg-dark text-white border-secondary form-select-sm" onchange="this.form.submit()">
-                    <option value="all" <?= $typeFilter == 'all' ? 'selected' : '' ?>>All Types</option>
-                    <option value="deposit" <?= $typeFilter == 'deposit' ? 'selected' : '' ?>>Deposits</option>
-                    <option value="withdraw" <?= $typeFilter == 'withdraw' ? 'selected' : '' ?>>Withdrawals</option>
-                </select>
-            </div>
-            <div class="col-auto flex-grow-1">
-                <input type="text" name="q" class="form-control bg-dark text-white border-secondary form-select-sm" placeholder="Search User ID, Phone, or TX ID..." value="<?= htmlspecialchars($searchQuery) ?>">
-            </div>
-            <div class="col-auto">
-                <button type="submit" class="btn btn-sm btn-info fw-bold">SEARCH</button>
-                <a href="queue.php" class="btn btn-sm btn-outline-secondary">RESET</a>
-            </div>
-        </form>
-    </div>
-</div>
+<?php if(isset($success)): ?><div class="alert bg-success bg-opacity-20 text-success border border-success fw-bold shadow-sm animate-pulse"><i class="bi bi-check-circle-fill me-2"></i><?= $success ?></div><?php endif; ?>
+<?php if(isset($error)): ?><div class="alert bg-danger bg-opacity-20 text-danger border border-danger fw-bold shadow-sm"><i class="bi bi-x-circle-fill me-2"></i><?= $error ?></div><?php endif; ?>
 
-<!-- QUEUE TABLE -->
-<div class="card">
-    <div class="card-header bg-transparent border-secondary d-flex justify-content-between">
-        <h5 class="mb-0 text-white">TRANSACTION QUEUE (<?= count($pending) ?>)</h5>
-        <button class="btn btn-sm btn-outline-light" onclick="location.reload()"><i class="bi bi-arrow-clockwise"></i> Refresh</button>
-    </div>
-    <div class="card-body p-0">
-        <div class="table-responsive">
-            <table class="table table-dark table-hover mb-0 align-middle">
-                <thead>
-                    <tr class="text-secondary text-uppercase text-xs" style="font-size: 0.8rem;">
-                        <th>TX ID</th>
-                        <th>User Profile</th>
-                        <th>Type</th>
-                        <th>Amount</th>
-                        <th>Provider Details</th>
-                        <th>Proof</th>
-                        <th>Time</th>
-                        <th class="text-end">Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php if(empty($pending)): ?>
-                        <tr><td colspan="8" class="text-center py-5 text-muted">No pending transactions.</td></tr>
-                    <?php else: foreach($pending as $row): ?>
-                        <tr>
-                            <td><span class="text-muted">#</span><?= $row['id'] ?></td>
-                            <td>
-                                <div class="d-flex align-items-center gap-2">
-                                    <div>
-                                        <div class="fw-bold text-white"><?= htmlspecialchars($row['username']) ?></div>
-                                        <div class="small text-muted"><?= htmlspecialchars($row['phone']) ?></div>
-                                        <div class="badge bg-secondary text-light" style="font-size: 0.65rem;">Lvl <?= $row['level'] ?> • Bal: <?= number_format($row['current_balance']) ?></div>
-                                    </div>
-                                </div>
-                            </td>
-                            <td>
-                                <?php if($row['type'] == 'deposit'): ?>
-                                    <span class="badge bg-success bg-opacity-25 text-success border border-success">DEPOSIT</span>
-                                <?php else: ?>
-                                    <span class="badge bg-danger bg-opacity-25 text-danger border border-danger">WITHDRAW</span>
-                                <?php endif; ?>
-                            </td>
-                            <td class="fw-bold font-monospace fs-6 <?= $row['type'] == 'deposit' ? 'text-success' : 'text-danger' ?>">
-                                <?= number_format($row['amount']) ?>
-                            </td>
-                            <td>
-                                <div class="fw-bold"><?= htmlspecialchars($row['provider_name'] ?? 'System') ?></div>
-                                <?php if($row['transaction_last_digits']): ?>
-                                    <div class="small text-info font-monospace">Ref: ...<?= htmlspecialchars($row['transaction_last_digits']) ?></div>
-                                <?php endif; ?>
-                            </td>
-                            <td>
-                                <?php if($row['proof_image']): ?>
-                                    <button class="btn btn-sm btn-outline-info" onclick="viewProof('<?= htmlspecialchars($row['proof_image']) ?>')">
-                                        <i class="bi bi-eye"></i> View
-                                    </button>
-                                <?php else: ?>
-                                    <span class="text-muted text-xs">No Proof</span>
-                                <?php endif; ?>
-                            </td>
-                            <td class="text-muted small">
-                                <div><?= date('H:i', strtotime($row['created_at'])) ?></div>
-                                <div style="font-size: 0.7rem;"><?= date('M d', strtotime($row['created_at'])) ?></div>
-                            </td>
-                            <td class="text-end">
-                                <div class="btn-group">
-                                    <button class="btn btn-sm btn-success" type="button" onclick="openProcessModal(<?= $row['id'] ?>, 'approve', '<?= $row['type'] ?>', <?= $row['amount'] ?>)">
-                                        <i class="bi bi-check-lg"></i>
-                                    </button>
-                                    <button class="btn btn-sm btn-danger" type="button" onclick="openProcessModal(<?= $row['id'] ?>, 'reject', '<?= $row['type'] ?>', <?= $row['amount'] ?>)">
-                                        <i class="bi bi-x-lg"></i>
-                                    </button>
-                                </div>
-                            </td>
-                        </tr>
-                    <?php endforeach; endif; ?>
-                </tbody>
-            </table>
+<div class="row g-3">
+    <?php if(empty($pending)): ?>
+        <div class="col-12">
+            <div class="glass-card text-center py-5 text-muted border-dashed border-secondary">
+                <i class="bi bi-cup-hot display-1 opacity-25 mb-3 d-block"></i>
+                <h4 class="fw-bold text-white">Queue is Empty</h4>
+                <p>All financial requests have been processed.</p>
+            </div>
+        </div>
+    <?php else: foreach($pending as $row): 
+        $isDep = $row['type'] === 'deposit';
+        $color = $isDep ? 'success' : 'danger';
+        $proofUrl = $row['proof_image'] ? $apiBase . '/' . ltrim($row['proof_image'], '/') : null;
+    ?>
+    <div class="col-md-6 col-xl-4">
+        <div class="glass-card h-100 p-0 overflow-hidden border-<?= $color ?> border-opacity-50 shadow-[0_5px_20px_rgba(0,0,0,0.5)] transition-transform hover:-translate-y-1">
+            
+            <div class="bg-<?= $color ?> bg-opacity-10 p-3 border-b border-<?= $color ?> border-opacity-30 d-flex justify-content-between align-items-center">
+                <span class="badge bg-<?= $color ?> text-<?= $isDep ? 'dark' : 'white' ?> fw-black tracking-widest px-3 py-1 rounded-pill">
+                    <i class="bi bi-arrow-<?= $isDep ? 'down' : 'up' ?>-circle me-1"></i> <?= strtoupper($row['type']) ?>
+                </span>
+                <span class="text-muted font-mono text-[10px]">TX #<?= $row['id'] ?></span>
+            </div>
+
+            <div class="p-4">
+                <div class="d-flex justify-content-between align-items-start mb-3">
+                    <div>
+                        <h5 class="fw-black text-white m-0"><?= htmlspecialchars($row['username']) ?></h5>
+                        <div class="text-muted font-mono text-xs mt-1"><i class="bi bi-phone"></i> <?= htmlspecialchars($row['phone']) ?></div>
+                    </div>
+                    <?php if($proofUrl): ?>
+                        <div class="w-12 h-12 rounded border border-secondary overflow-hidden cursor-pointer hover:border-info transition-colors" onclick="viewProof('<?= $proofUrl ?>')">
+                            <img src="<?= $proofUrl ?>" class="w-100 h-100 object-fit-cover" alt="Proof">
+                        </div>
+                    <?php else: ?>
+                        <div class="w-12 h-12 rounded border border-dashed border-secondary d-flex justify-content-center align-items-center text-muted">
+                            <i class="bi bi-image-alt"></i>
+                        </div>
+                    <?php endif; ?>
+                </div>
+
+                <div class="bg-black bg-opacity-40 p-3 rounded-xl border border-white border-opacity-5 mb-4 text-center shadow-inner">
+                    <span class="text-muted text-[9px] fw-bold text-uppercase tracking-widest d-block mb-1">REQUEST AMOUNT</span>
+                    <div class="text-<?= $color ?> font-mono fw-black fs-2 lh-1 drop-shadow-md">
+                        <?= $isDep ? '+' : '-' ?><?= number_format($row['amount']) ?>
+                    </div>
+                </div>
+
+                <div class="d-flex justify-content-between text-[10px] text-gray-400 font-mono mb-4 px-1 border-b border-white border-opacity-5 pb-3">
+                    <span><i class="bi bi-bank"></i> <?= htmlspecialchars($row['provider_name'] ?? 'System') ?></span>
+                    <span class="text-warning">REF: <?= $row['transaction_last_digits'] ? "*".$row['transaction_last_digits'] : '---' ?></span>
+                </div>
+
+                <div class="row g-2">
+                    <div class="col-6">
+                        <button class="btn btn-dark w-100 fw-bold border-danger text-danger hover:bg-danger hover:text-white transition-colors" onclick="openProcessModal(<?= $row['id'] ?>, 'reject', '<?= $row['type'] ?>', <?= $row['amount'] ?>)">
+                            <i class="bi bi-x-lg"></i> REJECT
+                        </button>
+                    </div>
+                    <div class="col-6">
+                        <button class="btn btn-success w-100 fw-black shadow-[0_0_15px_rgba(34,197,94,0.4)] hover:scale-105 active:scale-95 transition-all" onclick="openProcessModal(<?= $row['id'] ?>, 'approve', '<?= $row['type'] ?>', <?= $row['amount'] ?>)">
+                            <i class="bi bi-check2-circle"></i> APPROVE
+                        </button>
+                    </div>
+                </div>
+            </div>
+
         </div>
     </div>
+    <?php endforeach; endif; ?>
 </div>
 
 <!-- Process Modal -->
 <div class="modal fade" id="processModal" tabindex="-1">
-    <div class="modal-dialog">
-        <form method="POST" class="modal-content bg-dark border-secondary text-white">
-            <div class="modal-header border-secondary">
-                <h5 class="modal-title">Confirm Action</h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
+    <div class="modal-dialog modal-dialog-centered">
+        <form method="POST" class="modal-content glass-card border-secondary shadow-2xl">
+            <div class="modal-body p-5 text-center relative overflow-hidden">
                 <input type="hidden" name="tx_id" id="modalTxId">
                 <input type="hidden" name="action" id="modalAction">
                 
-                <div class="text-center mb-4">
-                    <h1 id="modalIcon" class="display-4 mb-2"></h1>
-                    <h4 id="modalTitle"></h4>
-                    <p id="modalDesc" class="text-muted"></p>
+                <h1 id="modalIcon" class="display-1 mb-3"></h1>
+                <h3 id="modalTitle" class="fw-black italic tracking-widest uppercase mb-2"></h3>
+                <p id="modalDesc" class="text-gray-400 small mb-4"></p>
+                
+                <div class="text-start mb-4">
+                    <label class="form-label text-muted small fw-bold tracking-widest text-uppercase">Agent Note (Mandatory for Rejects)</label>
+                    <textarea name="note" class="form-control bg-black text-white border-secondary rounded-xl p-3 font-mono text-sm" rows="2" placeholder="Processing details..."></textarea>
                 </div>
                 
-                <div class="mb-3">
-                    <label class="form-label text-secondary small">ADMIN NOTE</label>
-                    <textarea name="note" class="form-control bg-black text-white border-secondary" rows="2" placeholder="Reason for approval/rejection..."></textarea>
+                <div class="row g-2">
+                    <div class="col-6">
+                        <button type="button" class="btn btn-dark w-100 fw-bold py-3 rounded-pill" data-bs-dismiss="modal">CANCEL</button>
+                    </div>
+                    <div class="col-6">
+                        <button type="submit" class="btn w-100 fw-black py-3 rounded-pill shadow-lg" id="modalSubmitBtn">CONFIRM</button>
+                    </div>
                 </div>
-            </div>
-            <div class="modal-footer border-secondary">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="submit" class="btn" id="modalSubmitBtn">Confirm</button>
             </div>
         </form>
     </div>
@@ -256,58 +172,42 @@ foreach($pending as $p) {
 <!-- Proof Modal -->
 <div class="modal fade" id="proofModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered modal-lg">
-        <div class="modal-content bg-dark border-secondary">
-            <div class="modal-header border-secondary py-2">
-                <h6 class="modal-title text-white">Payment Proof</h6>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body p-0 bg-black d-flex justify-content-center">
-                <img id="proofImgDisplay" src="" class="img-fluid" style="max-height: 80vh;">
+        <div class="modal-content bg-transparent border-0 shadow-none">
+            <div class="modal-body p-0 text-center relative">
+                <button type="button" class="btn-close btn-close-white position-absolute top-0 end-0 m-3 z-10 bg-black p-2 rounded-circle" data-bs-dismiss="modal"></button>
+                <img id="proofImgDisplay" src="" class="img-fluid rounded-2xl border border-secondary shadow-[0_0_50px_rgba(255,255,255,0.2)]" style="max-height: 85vh;">
             </div>
         </div>
     </div>
 </div>
 
-<!-- JAVASCRIPT LOGIC -->
 <script>
 function openProcessModal(id, action, type, amount) {
-    // 1. Set Hidden Input Values
     document.getElementById('modalTxId').value = id;
     document.getElementById('modalAction').value = action;
-    
-    // 2. UI Elements
     const btn = document.getElementById('modalSubmitBtn');
     const title = document.getElementById('modalTitle');
     const desc = document.getElementById('modalDesc');
     const icon = document.getElementById('modalIcon');
-    
     const amountStr = new Intl.NumberFormat().format(amount) + ' MMK';
 
-    // 3. Configure Modal based on Action
     if (action === 'approve') {
-        btn.className = 'btn btn-success w-100 fw-bold';
-        btn.innerText = 'CONFIRM APPROVAL';
-        title.innerText = `Approve ${type.toUpperCase()}?`;
-        title.className = 'text-success fw-bold';
-        desc.innerHTML = `Transaction #${id} for <b class="text-white">${amountStr}</b> will be processed.`;
-        icon.innerHTML = '<i class="bi bi-check-circle-fill text-success"></i>';
+        btn.className = 'btn btn-success w-100 fw-black py-3 rounded-pill shadow-[0_0_15px_rgba(34,197,94,0.5)]';
+        btn.innerText = 'EXECUTE APPROVAL';
+        title.innerText = `Approve ${type}?`;
+        title.className = 'text-success fw-black italic tracking-widest uppercase mb-2';
+        desc.innerHTML = `Authorize transferring <b class="text-white font-mono">${amountStr}</b> for TX #${id}.`;
+        icon.innerHTML = '<i class="bi bi-shield-check text-success drop-shadow-[0_0_20px_lime]"></i>';
     } else {
-        btn.className = 'btn btn-danger w-100 fw-bold';
-        btn.innerText = 'CONFIRM REJECTION';
-        title.innerText = `Reject ${type.toUpperCase()}?`;
-        title.className = 'text-danger fw-bold';
-        if(type === 'withdraw') {
-            desc.innerHTML = `Funds (<b class="text-white">${amountStr}</b>) will be refunded to user balance.`;
-        } else {
-            desc.innerHTML = `Transaction #${id} will be marked as rejected.`;
-        }
-        icon.innerHTML = '<i class="bi bi-x-circle-fill text-danger"></i>';
+        btn.className = 'btn btn-danger w-100 fw-black py-3 rounded-pill shadow-[0_0_15px_rgba(239,68,68,0.5)]';
+        btn.innerText = 'EXECUTE REJECTION';
+        title.innerText = `Reject ${type}?`;
+        title.className = 'text-danger fw-black italic tracking-widest uppercase mb-2';
+        if(type === 'withdraw') desc.innerHTML = `Funds (<b class="text-white font-mono">${amountStr}</b>) will be returned to the player's wallet.`;
+        else desc.innerHTML = `Deposit request #${id} will be denied.`;
+        icon.innerHTML = '<i class="bi bi-shield-x text-danger drop-shadow-[0_0_20px_red]"></i>';
     }
-    
-    // 4. Show Modal using Bootstrap
-    const modalEl = document.getElementById('processModal');
-    const modal = new bootstrap.Modal(modalEl);
-    modal.show();
+    new bootstrap.Modal(document.getElementById('processModal')).show();
 }
 
 function viewProof(src) {
@@ -316,5 +216,4 @@ function viewProof(src) {
 }
 </script>
 
-<!-- INCLUDE FOOTER (Loads Bootstrap JS) -->
-<?php require_once '../../layout/footer.php'; ?>
+<?php require_once ADMIN_BASE_PATH . '/layout/footer.php'; ?>

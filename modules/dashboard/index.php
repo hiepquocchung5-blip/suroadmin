@@ -1,4 +1,9 @@
 <?php
+// Enable Error Reporting temporarily to catch any hidden issues (Prevents Blank Pages)
+ini_set('display_errors', 1);
+ini_set('display_startup_errors', 1);
+error_reporting(E_ALL);
+
 // CRITICAL SECURITY & ROUTING FIX: 
 // Prevent direct browser access and ensure the router's base path is used.
 if (!defined('ADMIN_BASE_PATH')) {
