@@ -4,10 +4,14 @@
  * Hides raw file paths and handles global routing.
  */
 session_start();
-require_once __DIR__ . '/config/db.php';
-require_once __DIR__ . '/includes/functions.php';
 
-// 1. Handle Logout
+// 1. DEFINE ABSOLUTE BASE PATH TO FIX "FILE NOT FOUND" ERRORS
+define('ADMIN_BASE_PATH', __DIR__);
+
+require_once ADMIN_BASE_PATH . '/config/db.php';
+require_once ADMIN_BASE_PATH . '/includes/functions.php';
+
+// 2. Handle Logout
 if (isset($_GET['logout'])) {
     session_unset();
     session_destroy();
@@ -15,7 +19,7 @@ if (isset($_GET['logout'])) {
     exit;
 }
 
-// 2. Handle Login Submission
+// 3. Handle Login Submission
 $loginError = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login_submit'])) {
     $username = cleanInput($_POST['username'] ?? '');
@@ -43,7 +47,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login_submit'])) {
     }
 }
 
-// 3. Render Login View if not authenticated
+// 4. Render Login View if not authenticated
 if (!isset($_SESSION['admin_id'])) {
     ?>
     <!DOCTYPE html>
@@ -88,7 +92,7 @@ if (!isset($_SESSION['admin_id'])) {
     exit;
 }
 
-// 4. Central Routing Engine
+// 5. Central Routing Engine
 $route = $_GET['route'] ?? 'dashboard';
 
 // Map friendly URLs to actual file paths
@@ -129,7 +133,7 @@ $routes = [
 ];
 
 if (array_key_exists($route, $routes)) {
-    $targetFile = __DIR__ . '/' . $routes[$route];
+    $targetFile = ADMIN_BASE_PATH . '/' . $routes[$route];
     if (file_exists($targetFile)) {
         require_once $targetFile;
     } else {

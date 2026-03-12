@@ -1,10 +1,9 @@
 <?php
-// Ensure this is loaded via the router or directly for AJAX
-if (!defined('__DIR__')) exit;
+// Ensure this is loaded via the router
+if (!defined('ADMIN_BASE_PATH')) exit('Direct access denied');
 
 // 1. AJAX HANDLER (Returns JSON)
 if (isset($_GET['ajax_fetch'])) {
-    // Security check logic is handled by the router/index.php environment
     $limit = 50;
     $minBet = isset($_GET['min_bet']) ? (int)$_GET['min_bet'] : 0;
     $type = $_GET['type'] ?? 'all';
@@ -64,7 +63,7 @@ if (isset($_GET['ajax_fetch'])) {
 // 2. MAIN PAGE RENDER
 $pageTitle = "Live Telemetry Feed";
 requireRole(['GOD', 'FINANCE']);
-require_once __DIR__ . '/../../layout/main.php';
+require_once ADMIN_BASE_PATH . '/layout/main.php';
 ?>
 
 <!-- KPI HEADS UP DISPLAY -->
@@ -123,7 +122,7 @@ require_once __DIR__ . '/../../layout/main.php';
             <option value="big_wins">BIG WINS (10x+)</option>
         </select>
         <input type="number" id="filterMinBet" class="form-control form-control-sm bg-black text-white border-secondary font-mono" placeholder="Min Bet" style="width: 120px;">
-        <button class="btn btn-sm btn-cyan fw-bold px-4" onclick="fetchLive()" style="background: #00f3ff; color: #000;">APPLY</button>
+        <button class="btn btn-sm btn-info fw-bold px-4" onclick="fetchLive()" style="background: #00f3ff; color: #000;">APPLY</button>
     </div>
     <div class="badge bg-success bg-opacity-20 text-success border border-success px-4 py-2 mt-2 mt-md-0 rounded-pill d-flex align-items-center gap-2 shadow-[0_0_15px_rgba(34,197,94,0.3)]">
         <span class="spinner-grow spinner-grow-sm" role="status" aria-hidden="true" style="width: 10px; height: 10px;"></span>
@@ -164,8 +163,8 @@ require_once __DIR__ . '/../../layout/main.php';
         const minBet = document.getElementById('filterMinBet').value;
 
         try {
-            // Using the router's current path to trigger the AJAX block
-            const res = await fetch(`?route=live&ajax_fetch=1&type=${type}&min_bet=${minBet}`);
+            // Because we route everything through index.php?route=live, this URL is correct
+            const res = await fetch(`index.php?route=live&ajax_fetch=1&type=${type}&min_bet=${minBet}`);
             const data = await res.json();
 
             if (data.status === 'success') {
@@ -225,7 +224,6 @@ require_once __DIR__ . '/../../layout/main.php';
         tbody.innerHTML = html;
     }
 
-    // Start Polling (Every 2 Seconds for real-time feel)
     fetchLive(); 
     pollInterval = setInterval(fetchLive, 2000);
 </script>
@@ -235,4 +233,4 @@ require_once __DIR__ . '/../../layout/main.php';
     .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 </style>
 
-<?php require_once __DIR__ . '/../../layout/footer.php'; ?>
+<?php require_once ADMIN_BASE_PATH . '/layout/footer.php'; ?>
