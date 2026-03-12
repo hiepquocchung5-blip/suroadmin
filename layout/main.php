@@ -1,11 +1,9 @@
 <?php
 // Prevent direct access to layout file
-if (!defined('__DIR__')) exit;
+if (!defined('ADMIN_BASE_PATH')) exit;
 $currentRoute = $_GET['route'] ?? 'dashboard';
-
-
-
 ?>
+
 <!DOCTYPE html>
 <html lang="en" data-bs-theme="dark">
 <head>
