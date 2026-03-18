@@ -46,6 +46,47 @@ foreach ($allRates as $r) {
     $spawnRatesByIsland[$r['island_id']][$r['reel_index']] = $r;
 }
 
+// --- 3. GEMINI IDEA: VOLATILITY DNA & AI INSIGHTS ---
+// Calculate the weight of High vs Low yield symbols to give Admin instant feedback
+$islandInsights = [];
+foreach($islands as $isl) {
+    $rates = $spawnRatesByIsland[$isl['id']];
+    $totalHigh = 0; 
+    $totalLow = 0;
+    
+    for ($reel = 1; $reel <= 3; $reel++) {
+        if (isset($rates[$reel])) {
+            // Sym 1 (7), Sym 2 (Char), Sym 3 (BAR) are High Yield
+            $totalHigh += $rates[$reel]['sym_1'] + $rates[$reel]['sym_2'] + $rates[$reel]['sym_3'];
+            // Sym 4 (Bell), Sym 5 (Melon), Sym 6 (Cherry), Sym 7 (Replay) are Low/Utility
+            $totalLow += $rates[$reel]['sym_4'] + $rates[$reel]['sym_5'] + $rates[$reel]['sym_6'] + $rates[$reel]['sym_7'];
+        }
+    }
+    
+    $total = $totalHigh + $totalLow;
+    $highPct = $total > 0 ? round(($totalHigh / $total) * 100) : 0;
+    $lowPct = 100 - $highPct;
+    
+    // AI Insight Generator
+    if ($highPct >= 20) {
+        $insight = "High variance detected. Expect rare, but massive payouts. High risk of bleeding if players get lucky.";
+        $color = "danger";
+    } elseif ($highPct <= 10) {
+        $insight = "Low variance drip-feed. Constant small wins to keep players engaged and seated longer.";
+        $color = "success";
+    } else {
+        $insight = "Balanced mathematical ecosystem. Steady progression with occasional exciting spikes.";
+        $color = "info";
+    }
+    
+    $islandInsights[$isl['id']] = [
+        'high_pct' => $highPct, 
+        'low_pct' => $lowPct, 
+        'text' => $insight,
+        'color' => $color
+    ];
+}
+
 require_once ADMIN_BASE_PATH . '/layout/main.php';
 ?>
 
@@ -62,9 +103,10 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
 <div class="row g-4">
     <?php foreach($islands as $isl): 
         $rtpColor = $isl['rtp_rate'] > 85 ? 'text-danger' : ($isl['rtp_rate'] < 60 ? 'text-info' : 'text-success');
+        $insightData = $islandInsights[$isl['id']];
     ?>
     <div class="col-md-6 col-xl-4">
-        <div class="glass-card h-100 overflow-hidden position-relative group">
+        <div class="glass-card h-100 overflow-hidden position-relative group d-flex flex-column">
             
             <!-- Card Header -->
             <div class="bg-black bg-opacity-50 p-4 border-b border-white border-opacity-10 d-flex justify-content-between align-items-start">
@@ -80,20 +122,35 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
             </div>
 
             <!-- Card Body / Stats -->
-            <div class="card-body p-4">
-                <div class="bg-black bg-opacity-30 border border-white border-opacity-5 rounded p-3 mb-4 text-center">
+            <div class="card-body p-4 flex-grow-1">
+                <div class="bg-black bg-opacity-30 border border-white border-opacity-5 rounded p-3 mb-4 text-center shadow-inner">
                     <small class="text-muted d-block text-[9px] text-uppercase fw-bold mb-1">Required Deposit</small>
                     <span class="text-warning fw-bold font-mono fs-5"><?= number_format($isl['req_deposit']) ?> <small class="text-[10px]">MMK</small></span>
                 </div>
 
-                <div class="d-grid gap-2">
-                    <button class="btn btn-outline-info w-100 fw-bold py-2 shadow-sm text-[11px] tracking-widest" onclick='openEditModal(<?= json_encode($isl) ?>)'>
+                <!-- NEW: Volatility DNA Visualizer -->
+                <div class="mb-4">
+                    <div class="d-flex justify-content-between text-[9px] text-gray-400 fw-bold uppercase tracking-widest mb-1">
+                        <span>Volatility DNA</span>
+                        <span class="text-<?= $insightData['color'] ?> font-mono"><?= $insightData['high_pct'] ?>% HIGH YIELD</span>
+                    </div>
+                    <div class="progress rounded-pill bg-dark border border-secondary" style="height: 6px;">
+                        <div class="progress-bar bg-danger" style="width: <?= $insightData['high_pct'] ?>%" title="High Value Symbols"></div>
+                        <div class="progress-bar bg-success opacity-75" style="width: <?= $insightData['low_pct'] ?>%" title="Low Value Symbols"></div>
+                    </div>
+                    <div class="text-[10px] text-gray-400 mt-2 font-mono fst-italic lh-sm p-2 bg-black bg-opacity-50 rounded border border-white border-opacity-5">
+                        <i class="bi bi-robot text-purple-400 me-1"></i> <span class="text-gray-300">System Insight:</span> <?= $insightData['text'] ?>
+                    </div>
+                </div>
+
+                <div class="d-grid gap-2 mt-auto">
+                    <button class="btn btn-outline-info w-100 fw-bold py-2 shadow-sm text-[11px] tracking-widest hover:bg-info hover:text-black transition-colors" onclick='openEditModal(<?= json_encode($isl) ?>)'>
                         <i class="bi bi-sliders"></i> EDIT CONFIGURATION
                     </button>
-                    <a href="?route=content/spawn_rates&island=<?= $isl['id'] ?>" class="btn btn-outline-warning w-100 fw-bold py-2 shadow-sm text-[11px] tracking-widest">
+                    <a href="?route=content/spawn_rates&island=<?= $isl['id'] ?>" class="btn btn-outline-warning w-100 fw-bold py-2 shadow-sm text-[11px] tracking-widest hover:bg-warning hover:text-black transition-colors">
                         <i class="bi bi-gear-wide-connected"></i> ADJUST SPAWN RATES
                     </a>
-                    <button class="btn w-100 fw-black py-2 shadow-[0_0_15px_rgba(34,197,94,0.3)] text-[11px] tracking-widest" style="background: linear-gradient(90deg, #10b981, #059669); color: #fff;" onclick="startSimulation(<?= $isl['id'] ?>)">
+                    <button class="btn w-100 fw-black py-2 shadow-[0_0_15px_rgba(34,197,94,0.3)] text-[11px] tracking-widest hover:scale-105 active:scale-95 transition-transform" style="background: linear-gradient(90deg, #10b981, #059669); color: #fff;" onclick="startSimulation(<?= $isl['id'] ?>)">
                         <i class="bi bi-terminal-fill me-1"></i> RUN 10K SPIN SIMULATION
                     </button>
                 </div>
@@ -177,47 +234,50 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
 
 <!-- SIMULATION TERMINAL MODAL -->
 <div class="modal fade" id="simModal" tabindex="-1" data-bs-backdrop="static">
-    <div class="modal-dialog modal-lg modal-dialog-centered">
-        <div class="modal-content border-success" style="background-color: #050505;">
-            <div class="modal-header border-success border-opacity-50 bg-success bg-opacity-10 py-2">
-                <h6 class="modal-title font-mono text-success fw-bold"><i class="bi bi-terminal me-2"></i> MATH_SIMULATOR_V3.exe - <span id="simTitle"></span></h6>
+    <div class="modal-dialog modal-xl modal-dialog-centered">
+        <div class="modal-content border-success" style="background-color: #050505; box-shadow: 0 0 50px rgba(16,185,129,0.2);">
+            <div class="modal-header border-success border-opacity-50 bg-success bg-opacity-10 py-3">
+                <h6 class="modal-title font-mono text-success fw-bold"><i class="bi bi-terminal me-2"></i> MATH_SIMULATOR_V4.exe - <span id="simTitle"></span></h6>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" onclick="stopSimulation()"></button>
             </div>
-            <div class="modal-body p-0">
-                <!-- Terminal Output -->
-                <div id="simTerminal" class="p-3 font-mono text-xs hide-scrollbar" style="height: 300px; overflow-y: auto; background-color: #000; color: #0f0; white-space: pre-wrap; line-height: 1.2;">
+            <div class="modal-body p-0 d-flex flex-column flex-lg-row">
+                
+                <!-- Terminal Output (Left) -->
+                <div id="simTerminal" class="p-4 font-mono text-xs hide-scrollbar flex-grow-1" style="height: 400px; overflow-y: auto; background-color: #000; color: #0f0; white-space: pre-wrap; line-height: 1.4; border-right: 1px solid rgba(16,185,129,0.3);">
                     > Initialization sequence started...
                 </div>
                 
-                <!-- Results Dashboard (Hidden until done) -->
-                <div id="simResults" class="p-4 bg-dark border-top border-success border-opacity-50 d-none">
-                    <div class="row text-center g-2 font-mono">
-                        <div class="col-4">
-                            <div class="p-2 border border-secondary rounded">
-                                <div class="text-muted" style="font-size: 10px;">TOTAL SPINS</div>
-                                <div class="text-white fs-5">10,000</div>
-                            </div>
+                <!-- Results Dashboard (Right) -->
+                <div id="simResults" class="p-4 bg-dark d-none" style="width: 350px; min-width: 300px;">
+                    <h6 class="text-success font-mono fw-bold mb-3 border-bottom border-success border-opacity-50 pb-2">SIMULATION RESULTS</h6>
+                    
+                    <div class="d-grid gap-2 font-mono mb-4">
+                        <div class="p-2 border border-secondary rounded bg-black bg-opacity-50 d-flex justify-content-between align-items-center">
+                            <span class="text-muted" style="font-size: 10px;">TOTAL SPINS</span>
+                            <span class="text-white fs-5 fw-bold">10,000</span>
                         </div>
-                        <div class="col-4">
-                            <div class="p-2 border border-secondary rounded">
-                                <div class="text-muted" style="font-size: 10px;">THEORETICAL RTP</div>
-                                <div class="text-info fs-5" id="resTheory">0%</div>
-                            </div>
+                        <div class="p-2 border border-secondary rounded bg-black bg-opacity-50 d-flex justify-content-between align-items-center">
+                            <span class="text-muted" style="font-size: 10px;">THEORETICAL RTP</span>
+                            <span class="text-info fs-5 fw-bold" id="resTheory">0%</span>
                         </div>
-                        <div class="col-4">
-                            <div class="p-2 border border-success rounded bg-success bg-opacity-10">
-                                <div class="text-success" style="font-size: 10px;">SIMULATED RTP</div>
-                                <div class="text-success fs-5 fw-bold" id="resActual">0%</div>
-                            </div>
+                        <div class="p-2 border border-success rounded bg-success bg-opacity-20 d-flex justify-content-between align-items-center shadow-[0_0_15px_rgba(16,185,129,0.3)]">
+                            <span class="text-success" style="font-size: 10px;">SIMULATED RTP</span>
+                            <span class="text-success fs-4 fw-black" id="resActual">0%</span>
+                        </div>
+                        <div class="p-2 border border-secondary rounded bg-black bg-opacity-50 d-flex justify-content-between align-items-center">
+                            <span class="text-muted" style="font-size: 10px;">HIT FREQUENCY</span>
+                            <span class="text-warning fs-5 fw-bold" id="resHitFreq">0%</span>
                         </div>
                     </div>
                     
-                    <div class="mt-3 border border-secondary rounded p-2 text-[10px] text-gray-400">
-                        <div class="row text-center" id="symDistro">
+                    <h6 class="text-gray-400 font-mono text-[10px] uppercase tracking-widest mb-2">Symbol Drop Matrix</h6>
+                    <div class="border border-secondary rounded p-3 bg-black bg-opacity-50 text-[10px] text-gray-300 font-mono">
+                        <div class="row text-center g-2" id="symDistro">
                             <!-- Injected by JS -->
                         </div>
                     </div>
                 </div>
+
             </div>
         </div>
     </div>
@@ -242,7 +302,7 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
         new bootstrap.Modal(document.getElementById('editIslandModal')).show();
     }
 
-    // --- MATHEMATICAL SIMULATION ENGINE (Replicates spin.php) ---
+    // --- MATHEMATICAL SIMULATION ENGINE ---
     function startSimulation(islandId) {
         const island = DB_ISLANDS.find(i => parseInt(i.id) === islandId);
         const rates = DB_SPAWN_RATES[islandId];
@@ -250,7 +310,7 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
         document.getElementById('simTitle').innerText = island.name;
         const term = document.getElementById('simTerminal');
         document.getElementById('simResults').classList.add('d-none');
-        term.innerHTML = `> Establishing mathematical sandbox for ${island.name}...\n> Target RTP: ${island.rtp_rate}%\n> Executing 10,000 continuous spins at 1,000 MMK per spin...\n\n`;
+        term.innerHTML = `> Establishing mathematical sandbox for [${island.name}]...\n> Fetching DNA Spawn Rates from Database...\n> Target Base RTP: ${island.rtp_rate}%\n> Executing 10,000 continuous spins at 1,000 MMK per spin...\n\n`;
         
         new bootstrap.Modal(document.getElementById('simModal')).show();
 
@@ -263,7 +323,6 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
         const multipliers = {2: 20, 3: 10, 4: 10, 5: 15, 6: 2, 7: 0};
         const symbolIcons = {1:'[7]', 2:'[CHAR]', 3:'[BAR]', 4:'[BELL]', 5:'[MELON]', 6:'[CHERRY]', 7:'[REPLAY]'};
         
-        // We also want to see what naturally drops from the DB spawn rates
         const pickSymbol = (weightsObj) => {
             const arr = Object.values(weightsObj);
             const total = arr.reduce((a,b)=>a+parseInt(b), 0);
@@ -292,24 +351,25 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
         const MAX_SPINS = 10000;
         let totalIn = 0;
         let totalOut = 0;
+        let totalWinningSpins = 0;
         
         // Stats trackers
-        let hits = {1:0, 2:0, 3:0, 4:0, 5:0, 6:0, 7:0}; // Natural reel drops
+        let hits = {1:0, 2:0, 3:0, 4:0, 5:0, 6:0, 7:0}; 
 
         simInterval = setInterval(() => {
-            // Run a batch of 250 spins per tick to animate
+            // Run a batch of 250 spins per tick to animate smoothly without browser freeze
             let batchOutput = '';
             for(let b=0; b<250 && spins < MAX_SPINS; b++) {
                 spins++;
                 totalIn += bet;
 
-                // 1. Natural Reel Drop (Just for stats distribution, what the user sees)
+                // Natural Reel Drop 
                 let r1 = pickSymbol(rates[1]);
                 let r2 = pickSymbol(rates[2]);
                 let r3 = pickSymbol(rates[3]);
                 hits[r1]++; hits[r2]++; hits[r3]++;
 
-                // 2. Hit Check
+                // Hit Check
                 let isHit = (Math.random() * 10000) <= (targetRtp * 100);
                 
                 if (isHit) {
@@ -317,9 +377,12 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
                     let winAmt = bet * multipliers[winSym];
                     totalOut += winAmt;
                     
-                    if (spins % 100 === 0 || winAmt >= 10000) { // Log occasional hits and all big hits
+                    // We only count it as a "win" if it pays out > 0 (ignores replay zero payouts)
+                    if (winAmt > 0) totalWinningSpins++;
+                    
+                    if (spins % 100 === 0 || winAmt >= 10000) { 
                         const reelDisplay = `${symbolIcons[winSym]} ${symbolIcons[winSym]} ${symbolIcons[winSym]}`;
-                        batchOutput += `[SPIN ${spins.toString().padStart(5, '0')}] ${reelDisplay} -> Payout: +${winAmt.toLocaleString()} MMK\n`;
+                        batchOutput += `<span style="color:#0aa;">[SPIN ${spins.toString().padStart(5, '0')}]</span> <span style="color:#fff;">${reelDisplay}</span> -> <span style="color:#ff0;">Payout: +${winAmt.toLocaleString()} MMK</span>\n`;
                     }
                 }
             }
@@ -331,28 +394,38 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
 
             if (spins >= MAX_SPINS) {
                 clearInterval(simInterval);
-                term.innerHTML += `\n> SIMULATION COMPLETE.\n> Calculating physical return matrix...`;
+                term.innerHTML += `\n<span style="color:#fff;">> SIMULATION COMPLETE.</span>\n> Calculating physical return matrix...`;
                 term.scrollTop = term.scrollHeight;
                 
                 let actualRtp = ((totalOut / totalIn) * 100).toFixed(2);
+                let hitFrequency = ((totalWinningSpins / MAX_SPINS) * 100).toFixed(2);
                 
                 document.getElementById('resTheory').innerText = `${targetRtp.toFixed(2)}%`;
                 document.getElementById('resActual').innerText = `${actualRtp}%`;
+                document.getElementById('resHitFreq').innerText = `${hitFrequency}%`;
                 
                 // Color code the result based on variance
                 const diff = actualRtp - targetRtp;
                 const actEl = document.getElementById('resActual');
-                if (diff > 3) actEl.className = "text-danger fs-5 fw-bold animate-pulse";
-                else if (diff < -3) actEl.className = "text-warning fs-5 fw-bold";
-                else actEl.className = "text-success fs-5 fw-bold";
+                if (diff > 3) actEl.className = "text-danger fs-4 fw-black drop-shadow-[0_0_10px_red] animate-pulse";
+                else if (diff < -3) actEl.className = "text-warning fs-4 fw-black";
+                else actEl.className = "text-success fs-4 fw-black drop-shadow-[0_0_10px_lime]";
 
                 // Build Symbol Distribution
                 const totalSyms = MAX_SPINS * 3;
                 const names = {1:'GJP', 2:'Char', 3:'BAR', 4:'Bell', 5:'Melon', 6:'Cherry', 7:'Replay'};
+                const colors = {1:'#ef4444', 2:'#a855f7', 3:'#f97316', 4:'#eab308', 5:'#22c55e', 6:'#ec4899', 7:'#06b6d4'};
+                
                 let distHtml = '';
                 for(let i=1; i<=7; i++) {
                     let pct = ((hits[i] / totalSyms) * 100).toFixed(1);
-                    distHtml += `<div class="col"><div class="fw-bold text-white">${names[i]}</div><div>${pct}%</div></div>`;
+                    distHtml += `
+                        <div class="col-6 mb-2">
+                            <div class="d-flex justify-content-between align-items-center border-bottom border-white border-opacity-10 pb-1">
+                                <span style="color:${colors[i]}; font-weight:bold;">${names[i]}</span>
+                                <span>${pct}%</span>
+                            </div>
+                        </div>`;
                 }
                 document.getElementById('symDistro').innerHTML = distHtml;
 
