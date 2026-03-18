@@ -8,28 +8,35 @@ requireRole(['GOD']);
 // Handle Saving New Weights
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'save_rates') {
     $islandId = (int)$_POST['island_id'];
+    $applyToAll = isset($_POST['apply_to_all']) ? true : false;
+    
+    // Determine which islands we are updating
+    $targetIslands = $applyToAll ? [1, 2, 3, 4, 5] : [$islandId];
     
     try {
         $pdo->beginTransaction();
         
-        for ($i = 1; $i <= 3; $i++) {
-            $sym1 = (int)$_POST["reel_{$i}_sym_1"];
-            $sym2 = (int)$_POST["reel_{$i}_sym_2"];
-            $sym3 = (int)$_POST["reel_{$i}_sym_3"];
-            $sym4 = (int)$_POST["reel_{$i}_sym_4"];
-            $sym5 = (int)$_POST["reel_{$i}_sym_5"];
-            $sym6 = (int)$_POST["reel_{$i}_sym_6"];
-            $sym7 = (int)$_POST["reel_{$i}_sym_7"];
+        foreach ($targetIslands as $tId) {
+            for ($i = 1; $i <= 3; $i++) {
+                $sym1 = (int)$_POST["reel_{$i}_sym_1"];
+                $sym2 = (int)$_POST["reel_{$i}_sym_2"];
+                $sym3 = (int)$_POST["reel_{$i}_sym_3"];
+                $sym4 = (int)$_POST["reel_{$i}_sym_4"];
+                $sym5 = (int)$_POST["reel_{$i}_sym_5"];
+                $sym6 = (int)$_POST["reel_{$i}_sym_6"];
+                $sym7 = (int)$_POST["reel_{$i}_sym_7"];
 
-            $sql = "INSERT INTO reel_spawn_rates (island_id, reel_index, sym_1, sym_2, sym_3, sym_4, sym_5, sym_6, sym_7) 
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    ON DUPLICATE KEY UPDATE sym_1=VALUES(sym_1), sym_2=VALUES(sym_2), sym_3=VALUES(sym_3), sym_4=VALUES(sym_4), sym_5=VALUES(sym_5), sym_6=VALUES(sym_6), sym_7=VALUES(sym_7)";
-            $pdo->prepare($sql)->execute([$islandId, $i, $sym1, $sym2, $sym3, $sym4, $sym5, $sym6, $sym7]);
+                $sql = "INSERT INTO reel_spawn_rates (island_id, reel_index, sym_1, sym_2, sym_3, sym_4, sym_5, sym_6, sym_7) 
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        ON DUPLICATE KEY UPDATE sym_1=VALUES(sym_1), sym_2=VALUES(sym_2), sym_3=VALUES(sym_3), sym_4=VALUES(sym_4), sym_5=VALUES(sym_5), sym_6=VALUES(sym_6), sym_7=VALUES(sym_7)";
+                $pdo->prepare($sql)->execute([$tId, $i, $sym1, $sym2, $sym3, $sym4, $sym5, $sym6, $sym7]);
+            }
         }
 
         $pdo->commit();
-        $success = "Reel Spawn Matrix synced to active servers for Island #$islandId.";
-        $pdo->prepare("INSERT INTO audit_logs (admin_id, action, target_table) VALUES (?, ?, 'reel_spawn_rates')")->execute([$_SESSION['admin_id'], "Updated Spawn Matrix for Island #$islandId"]);
+        $targetMsg = $applyToAll ? "ALL 5 ISLANDS" : "Island #$islandId";
+        $success = "Reel Spawn Matrix synced to active servers for $targetMsg.";
+        $pdo->prepare("INSERT INTO audit_logs (admin_id, action, target_table) VALUES (?, ?, 'reel_spawn_rates')")->execute([$_SESSION['admin_id'], "Updated Spawn Matrix for $targetMsg"]);
     } catch (Exception $e) {
         $pdo->rollBack();
         $error = "Matrix Sync Failed: " . $e->getMessage();
@@ -67,9 +74,12 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
         <p class="text-muted small mt-1 font-mono">Real-time symbol probability manipulation and theoretical telemetry.</p>
     </div>
     
-    <div>
+    <div class="d-flex gap-2">
+        <button class="btn btn-outline-success fw-bold px-4 rounded-pill shadow-sm" data-bs-toggle="modal" data-bs-target="#importModal">
+            <i class="bi bi-download me-1"></i> IMPORT JSON
+        </button>
         <button class="btn btn-outline-info fw-bold px-4 rounded-pill shadow-sm" onclick="exportMatrix()">
-            <i class="bi bi-clipboard-data me-1"></i> COPY MATRIX JSON
+            <i class="bi bi-clipboard-data me-1"></i> COPY JSON
         </button>
     </div>
 </div>
@@ -87,10 +97,10 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
     <!-- INTELLIGENT PRESETS ENGINE -->
     <div class="d-flex gap-2 align-items-center bg-black bg-opacity-50 p-1 rounded-pill border border-white border-opacity-10">
         <span class="text-muted small fw-bold text-uppercase tracking-widest ms-3 me-1"><i class="bi bi-cpu text-info"></i> AI PRESETS:</span>
-        <button type="button" class="btn btn-sm btn-dark text-white rounded-pill px-3" onclick="applyPreset('balanced')">Balanced</button>
-        <button type="button" class="btn btn-sm btn-dark text-danger rounded-pill px-3" onclick="applyPreset('high_vol')">High Volatility</button>
-        <button type="button" class="btn btn-sm btn-dark text-success rounded-pill px-3" onclick="applyPreset('low_vol')">Low Vol (Drip)</button>
-        <button type="button" class="btn btn-sm btn-dark text-warning rounded-pill px-3" onclick="applyPreset('teaser')">Teaser Heavy</button>
+        <button type="button" class="btn btn-sm btn-dark text-white rounded-pill px-3 hover:bg-gray-800 transition-colors" onclick="applyPreset('balanced')">Balanced</button>
+        <button type="button" class="btn btn-sm btn-dark text-danger rounded-pill px-3 hover:bg-red-900 hover:text-white transition-colors" onclick="applyPreset('high_vol')">High Volatility</button>
+        <button type="button" class="btn btn-sm btn-dark text-success rounded-pill px-3 hover:bg-green-900 hover:text-white transition-colors" onclick="applyPreset('low_vol')">Low Vol (Drip)</button>
+        <button type="button" class="btn btn-sm btn-dark text-warning rounded-pill px-3 hover:bg-yellow-900 hover:text-white transition-colors" onclick="applyPreset('teaser')">Teaser Heavy</button>
     </div>
 </div>
 
@@ -176,16 +186,43 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
         <?php endfor; ?>
     </div>
 
-    <div class="glass-card mt-4 p-4 border border-warning border-opacity-30 d-flex justify-content-between align-items-center bg-black bg-opacity-60">
-        <div class="text-muted small w-75 font-mono text-[10px]">
-            <i class="bi bi-shield-check text-success me-2"></i> 
-            Matrix computations run instantly on the client. Click deploy to sync these exact weights to the game servers.
+    <!-- SUBMISSION BAR -->
+    <div class="glass-card mt-4 p-4 border border-warning border-opacity-30 d-flex justify-content-between align-items-center bg-black bg-opacity-60 flex-wrap gap-3">
+        <div class="text-muted small font-mono text-[10px] d-flex align-items-center gap-4">
+            <div>
+                <i class="bi bi-shield-check text-success me-2"></i> 
+                Matrix computations run instantly on the client. Click deploy to sync these exact weights to the game servers.
+            </div>
+            
+            <!-- NEW: Apply to All Toggle -->
+            <div class="form-check form-switch bg-warning bg-opacity-10 border border-warning border-opacity-25 px-3 py-2 rounded-3 d-flex align-items-center gap-2">
+                <input class="form-check-input mt-0" type="checkbox" name="apply_to_all" id="applyAllSwitch" style="cursor:pointer; width: 2em; height: 1em;">
+                <label class="form-check-label text-warning fw-bold text-uppercase tracking-widest" for="applyAllSwitch">Apply to all 5 Islands</label>
+            </div>
         </div>
+
         <button type="submit" class="btn btn-warning fw-black px-5 py-3 shadow-[0_0_20px_rgba(234,179,8,0.5)] text-dark hover:scale-105 active:scale-95 transition-transform tracking-widest">
-            <i class="bi bi-cloud-arrow-up-fill me-2"></i> DEPLOY TO LIVE SERVERS
+            <i class="bi bi-cloud-arrow-up-fill me-2"></i> DEPLOY TO SERVERS
         </button>
     </div>
 </form>
+
+<!-- IMPORT MODAL -->
+<div class="modal fade" id="importModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content glass-card bg-dark border-success">
+            <div class="modal-header border-secondary bg-black bg-opacity-50">
+                <h5 class="modal-title fw-black text-success italic tracking-widest"><i class="bi bi-file-code me-2"></i> IMPORT MATRIX JSON</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4">
+                <p class="text-gray-400 small mb-3">Paste a previously copied JSON matrix array below to instantly populate the 21 reel variables.</p>
+                <textarea id="importJsonInput" class="form-control bg-black text-success font-mono border-secondary rounded-lg mb-3" rows="6" placeholder='{"r1":[10,40,100,200,200,250,200], ...}'></textarea>
+                <button type="button" onclick="importMatrixJson()" class="btn btn-success w-100 fw-bold shadow-lg">INJECT DATA</button>
+            </div>
+        </div>
+    </div>
+</div>
 
 <script>
 // --- LIVE MATHEMATICS ENGINE (Client-Side Simulation) ---
@@ -305,6 +342,42 @@ function exportMatrix() {
     }
     navigator.clipboard.writeText(JSON.stringify(matrix));
     alert("Matrix JSON copied to clipboard!");
+}
+
+// JSON Matrix Import
+function importMatrixJson() {
+    try {
+        const jsonStr = document.getElementById('importJsonInput').value;
+        const matrix = JSON.parse(jsonStr);
+        
+        if (matrix.r1 && matrix.r2 && matrix.r3) {
+            for(let r=1; r<=3; r++) {
+                for(let s=1; s<=7; s++) {
+                    if(matrix[`r${r}`][s-1] !== undefined) {
+                        document.getElementById(`input_r${r}_s${s}`).value = matrix[`r${r}`][s-1];
+                    }
+                }
+            }
+            triggerRecalc();
+            
+            // Visual Highlight for Success
+            document.querySelectorAll('.weight-input').forEach(el => {
+                el.classList.add('border-success', 'shadow-[0_0_10px_lime]');
+                setTimeout(() => el.classList.remove('border-success', 'shadow-[0_0_10px_lime]'), 500);
+            });
+            
+            // Close Modal
+            const modalEl = document.getElementById('importModal');
+            const modal = bootstrap.Modal.getInstance(modalEl);
+            if (modal) modal.hide();
+            
+            document.getElementById('importJsonInput').value = '';
+        } else {
+            alert("Invalid Matrix Format. Expected {r1:[], r2:[], r3:[]}");
+        }
+    } catch(e) {
+        alert("Invalid JSON data. Please check syntax.");
+    }
 }
 
 // Init calculation on load
