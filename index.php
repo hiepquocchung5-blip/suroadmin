@@ -116,6 +116,7 @@ $routes = [
     'content/islands'   => 'modules/islands/index.php',
     'content/chars'     => 'modules/characters/index.php',
     'content/editor'    => 'modules/characters/editor.php',
+    'content/spawn_rates'   => 'modules/islands/spawn_rates.php',
     
     'marketing/events'  => 'modules/marketing/events.php',
     'marketing/jackpots'=> 'modules/marketing/jackpots.php',
