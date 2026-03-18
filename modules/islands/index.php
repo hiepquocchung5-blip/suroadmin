@@ -5,31 +5,7 @@ if (!defined('ADMIN_BASE_PATH')) exit('Direct access denied');
 $pageTitle = "World Engine & Simulations";
 requireRole(['GOD']);
 
-// --- 1. ONE-CLICK SYNC FOR V3 DATA (Removed Volatility) ---
-if (isset($_GET['sync_v3'])) {
-    $v3Data = [
-        [1, 'Kyoto Zen', 'kyoto_zen', 'Peaceful, spiritual, and deeply rooted in history.', 0, 70.00, 'luna', 'none', 'leaf', 1, 0],
-        [2, 'Okinawa Tropic', 'neon_arcade', 'Bustling, flashy, and alive with energy.', 0, 70.00, 'mika', 'neon_rain', 'gamepad', 1, 50000],
-        [3, 'Osaka Neon', 'edo_castle', 'A step back in time to the era of samurai.', 0, 70.00, 'kira', 'ash', 'castle', 1, 100000],
-        [4, 'Tokyo Cyber', 'hanami_fest', 'Celebratory, romantic, and beautifully seasonal.', 0, 70.00, 'yami', 'clouds', 'flower', 1, 500000],
-        [5, 'Ginza Gold', 'spirited_yokai', 'Mystical, slightly spooky, and enchanting.', 0, 70.00, 'glacia', 'stars', 'ghost', 1, 1000000]
-    ];
-    
-    $pdo->beginTransaction();
-    $pdo->exec("ALTER TABLE `islands` ADD COLUMN IF NOT EXISTS `req_deposit` DECIMAL(16,2) DEFAULT 0.00");
-    
-    // We intentionally drop volatility if it exists to clean up the DB
-    try { $pdo->exec("ALTER TABLE `islands` DROP COLUMN `volatility`"); } catch(Exception $e) {}
-    
-    $stmt = $pdo->prepare("INSERT INTO islands (id, name, slug, `desc`, unlock_price, rtp_rate, hostess_char_id, atmosphere_type, icon_emoji, is_active, req_deposit) 
-                           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) 
-                           ON DUPLICATE KEY UPDATE name=VALUES(name), slug=VALUES(slug), `desc`=VALUES(`desc`), rtp_rate=VALUES(rtp_rate), hostess_char_id=VALUES(hostess_char_id), atmosphere_type=VALUES(atmosphere_type), icon_emoji=VALUES(icon_emoji), req_deposit=VALUES(req_deposit)");
-    foreach($v3Data as $row) { $stmt->execute($row); }
-    $pdo->commit();
-    $success = "V3 Islands synchronized successfully. Volatility deprecated in favor of Spawn Rates.";
-}
-
-// --- 2. HANDLE FORM UPDATES (Removed Volatility) ---
+// --- 1. HANDLE FORM UPDATES ---
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'update_island') {
     $id = (int)$_POST['id'];
     try {
@@ -49,14 +25,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     }
 }
 
-// --- 3. FETCH ISLANDS & SPAWN RATES FOR JS SIMULATION ---
+// --- 2. FETCH ISLANDS & SPAWN RATES FOR JS SIMULATION ---
+// Strictly limit to the 5 production V3 islands
 $islands = $pdo->query("SELECT * FROM islands WHERE id <= 5 ORDER BY id ASC")->fetchAll(PDO::FETCH_ASSOC);
 
 $ratesQuery = $pdo->query("SELECT * FROM reel_spawn_rates");
 $allRates = $ratesQuery->fetchAll(PDO::FETCH_ASSOC);
 $spawnRatesByIsland = [];
 
-// Initialize default fallback arrays
+// Initialize default fallback arrays in case an island has no rates set yet
 foreach($islands as $isl) {
     $spawnRatesByIsland[$isl['id']] = [
         1 => ['sym_1'=>10, 'sym_2'=>40, 'sym_3'=>100, 'sym_4'=>200, 'sym_5'=>200, 'sym_6'=>250, 'sym_7'=>200],
@@ -77,9 +54,6 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
         <h2 class="fw-black text-info italic tracking-widest mb-0"><i class="bi bi-globe-americas"></i> WORLD ENGINE</h2>
         <p class="text-muted small mt-1">Manage environmental variables, economy gates, and mathematically simulate RTP.</p>
     </div>
-    <a href="?route=content/islands&sync_v3=1" class="btn btn-warning fw-bold shadow-lg" onclick="return confirm('Force overwrite all 5 islands with hardcoded V3 defaults?');">
-        <i class="bi bi-arrow-repeat"></i> FORCE SYNC V3 DEFAULTS
-    </a>
 </div>
 
 <?php if(isset($success)): ?><div class="alert bg-success bg-opacity-20 text-success border border-success fw-bold shadow-sm animate-pulse"><i class="bi bi-check-circle-fill me-2"></i><?= $success ?></div><?php endif; ?>
@@ -129,7 +103,7 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
     <?php endforeach; ?>
 </div>
 
-<!-- V2 EDIT MODAL -->
+<!-- EDIT MODAL -->
 <div class="modal fade" id="editIslandModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered modal-lg">
         <form method="POST" class="modal-content glass-card border-info shadow-[0_0_50px_rgba(13,202,240,0.2)]">
@@ -287,6 +261,7 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
         // General Win Weights (Matches spin.php)
         const winSymWeights = {2: 5, 3: 10, 4: 25, 5: 20, 6: 25, 7: 15};
         const multipliers = {2: 20, 3: 10, 4: 10, 5: 15, 6: 2, 7: 0};
+        const symbolIcons = {1:'[7]', 2:'[CHAR]', 3:'[BAR]', 4:'[BELL]', 5:'[MELON]', 6:'[CHERRY]', 7:'[REPLAY]'};
         
         // We also want to see what naturally drops from the DB spawn rates
         const pickSymbol = (weightsObj) => {
@@ -342,18 +317,22 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
                     let winAmt = bet * multipliers[winSym];
                     totalOut += winAmt;
                     
-                    if (spins % 100 === 0) { // Log occasional hits
-                        batchOutput += `[SPIN ${spins}] HIT! Symbol [${winSym}] Payout: +${winAmt} MMK\n`;
+                    if (spins % 100 === 0 || winAmt >= 10000) { // Log occasional hits and all big hits
+                        const reelDisplay = `${symbolIcons[winSym]} ${symbolIcons[winSym]} ${symbolIcons[winSym]}`;
+                        batchOutput += `[SPIN ${spins.toString().padStart(5, '0')}] ${reelDisplay} -> Payout: +${winAmt.toLocaleString()} MMK\n`;
                     }
                 }
             }
 
-            term.innerHTML += batchOutput;
-            term.scrollTop = term.scrollHeight;
+            if (batchOutput !== '') {
+                term.innerHTML += batchOutput;
+                term.scrollTop = term.scrollHeight;
+            }
 
             if (spins >= MAX_SPINS) {
                 clearInterval(simInterval);
                 term.innerHTML += `\n> SIMULATION COMPLETE.\n> Calculating physical return matrix...`;
+                term.scrollTop = term.scrollHeight;
                 
                 let actualRtp = ((totalOut / totalIn) * 100).toFixed(2);
                 
