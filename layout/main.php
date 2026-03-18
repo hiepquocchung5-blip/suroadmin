@@ -194,6 +194,7 @@ $currentRoute = $_GET['route'] ?? 'dashboard';
         
         <div class="nav-category">World Engine</div>
         <a href="?route=content/islands" class="nav-link <?= $currentRoute == 'content/islands' ? 'active' : '' ?>"><i class="bi bi-map"></i> Islands & RTP</a>
+        <a href="?route=content/spawn_rates" class="nav-link <?= $currentRoute == 'content/spawn_rates' ? 'active' : '' ?>"><i class="bi bi-gear-wide-connected"></i> Math Engine (RTP)</a>
         <a href="?route=marketing/jackpots" class="nav-link <?= $currentRoute == 'marketing/jackpots' ? 'active' : '' ?>"><i class="bi bi-trophy"></i> Jackpots</a>
         
         <div class="nav-category">System</div>
