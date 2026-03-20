@@ -84,7 +84,6 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
     </div>
 </div>
 
-<!-- HEADER NAV (Island Select) -->
 <div class="glass-card p-3 mb-4 d-flex justify-content-between align-items-center flex-wrap gap-3 border-warning border-opacity-30 shadow-[0_0_20px_rgba(234,179,8,0.1)]">
     <div class="d-flex gap-2 flex-wrap">
         <?php foreach($islands as $isl): ?>
@@ -94,7 +93,6 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
         <?php endforeach; ?>
     </div>
     
-    <!-- INTELLIGENT PRESETS ENGINE -->
     <div class="d-flex gap-2 align-items-center bg-black bg-opacity-50 p-1 rounded-pill border border-white border-opacity-10">
         <span class="text-muted small fw-bold text-uppercase tracking-widest ms-3 me-1"><i class="bi bi-cpu text-info"></i> AI PRESETS:</span>
         <button type="button" class="btn btn-sm btn-dark text-white rounded-pill px-3 hover:bg-gray-800 transition-colors" onclick="applyPreset('balanced')">Balanced</button>
@@ -111,7 +109,6 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
     <input type="hidden" name="action" value="save_rates">
     <input type="hidden" name="island_id" value="<?= $currentIsland ?>">
 
-    <!-- LIVE TELEMETRY DASHBOARD -->
     <div class="glass-card mb-4 p-4 border-info border-opacity-30 bg-gradient-to-r from-blue-900/20 to-black">
         <div class="row align-items-center">
             <div class="col-md-5 border-end border-white border-opacity-10">
@@ -126,7 +123,7 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
             </div>
             <div class="col-md-7 ps-md-4">
                 <div class="d-flex justify-content-between text-[10px] text-gray-400 fw-bold uppercase tracking-widest mb-2">
-                    <span>Volatility DNA</span>
+                    <span>Volatility DNA (GJP, LOGO, 7)</span>
                     <span class="text-danger font-mono" id="calcHighYield">0% HIGH YIELD</span>
                 </div>
                 <div class="progress rounded-pill bg-dark border border-secondary shadow-inner" style="height: 10px;">
@@ -140,7 +137,6 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
         </div>
     </div>
 
-    <!-- REELS GRID -->
     <div class="row g-4">
         <?php for ($reel = 1; $reel <= 3; $reel++): 
             $data = $formattedRates[$reel];
@@ -156,14 +152,15 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
 
                 <div class="p-4 space-y-3 bg-black bg-opacity-40">
                     <?php 
+                    // UPDATED SYMBOL HIERARCHY
                     $symLabels = [
-                        1 => ['7 (Grand JP)', 'text-danger', 'High variance trigger'],
-                        2 => ['Character', 'text-purple-400', 'Medium-High multiplier'],
-                        3 => ['BAR', 'text-orange-400', 'Medium multiplier'],
-                        4 => ['Bell', 'text-yellow-400', 'Standard hit'],
-                        5 => ['Melon', 'text-success', 'Standard hit'],
-                        6 => ['Cherry', 'text-pink-400', 'Frequent small hit'],
-                        7 => ['Replay', 'text-cyan-400', 'Free spin trigger']
+                        1 => ['Grand Jackpot (GJP)', 'text-red-500 bg-red-950/30 border-red-500/50', 'Massive progressive trigger'],
+                        2 => ['LOGO', 'text-purple-400 bg-purple-950/30 border-purple-500/50', 'High tier multiplier'],
+                        3 => ['7 (Seven)', 'text-orange-400 bg-orange-950/30 border-orange-500/50', 'Medium-High multiplier'],
+                        4 => ['Melon', 'text-green-400 bg-green-950/30 border-green-500/50', 'Standard hit'],
+                        5 => ['Bell', 'text-yellow-400 bg-yellow-950/30 border-yellow-500/50', 'Standard hit'],
+                        6 => ['Cherry', 'text-pink-400 bg-pink-950/30 border-pink-500/50', 'Frequent small hit'],
+                        7 => ['Replay', 'text-cyan-400 bg-cyan-950/30 border-cyan-500/50', 'Free spin trigger']
                     ];
                     
                     for ($s = 1; $s <= 7; $s++): 
@@ -173,11 +170,13 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
                     <div class="mb-3">
                         <div class="d-flex justify-content-between mb-1 align-items-end">
                             <div>
-                                <span class="small fw-bold <?= $symLabels[$s][1] ?> text-uppercase"><?= $symLabels[$s][0] ?></span>
+                                <span class="badge border <?= $symLabels[$s][1] ?> font-black tracking-widest px-2 py-1 shadow-sm">
+                                    <?= $symLabels[$s][0] ?>
+                                </span>
                             </div>
                             <span class="small font-mono text-gray-400 bg-black px-2 py-0.5 rounded border border-white border-opacity-10" id="pct_r<?= $reel ?>_s<?= $s ?>"><?= $pct ?>%</span>
                         </div>
-                        <input type="number" name="reel_<?= $reel ?>_sym_<?= $s ?>" id="input_r<?= $reel ?>_s<?= $s ?>" value="<?= $val ?>" min="0" class="form-control bg-dark text-white border-secondary font-mono text-sm shadow-inner weight-input transition-colors focus:border-info focus:ring-1 focus:ring-info" data-reel="<?= $reel ?>" required oninput="triggerRecalc()">
+                        <input type="number" name="reel_<?= $reel ?>_sym_<?= $s ?>" id="input_r<?= $reel ?>_s<?= $s ?>" value="<?= $val ?>" min="0" class="form-control bg-dark text-white border-secondary font-mono text-sm shadow-inner weight-input transition-colors focus:border-info focus:ring-1 focus:ring-info mt-1" data-reel="<?= $reel ?>" required oninput="triggerRecalc()">
                     </div>
                     <?php endfor; ?>
                 </div>
@@ -186,7 +185,6 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
         <?php endfor; ?>
     </div>
 
-    <!-- SUBMISSION BAR -->
     <div class="glass-card mt-4 p-4 border border-warning border-opacity-30 d-flex justify-content-between align-items-center bg-black bg-opacity-60 flex-wrap gap-3">
         <div class="text-muted small font-mono text-[10px] d-flex align-items-center gap-4">
             <div>
@@ -194,7 +192,6 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
                 Matrix computations run instantly on the client. Click deploy to sync these exact weights to the game servers.
             </div>
             
-            <!-- NEW: Apply to All Toggle -->
             <div class="form-check form-switch bg-warning bg-opacity-10 border border-warning border-opacity-25 px-3 py-2 rounded-3 d-flex align-items-center gap-2">
                 <input class="form-check-input mt-0" type="checkbox" name="apply_to_all" id="applyAllSwitch" style="cursor:pointer; width: 2em; height: 1em;">
                 <label class="form-check-label text-warning fw-bold text-uppercase tracking-widest" for="applyAllSwitch">Apply to all 5 Islands</label>
@@ -207,7 +204,6 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
     </div>
 </form>
 
-<!-- IMPORT MODAL -->
 <div class="modal fade" id="importModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content glass-card bg-dark border-success">
@@ -247,7 +243,6 @@ function triggerRecalc() {
     }
 
     // 2. Calculate Theoretical Hit Frequency (P(Win) across 5 lines)
-    // P(Win for Symbol X on 1 line) = (Weight X on R1 / Total R1) * (Weight X on R2 / Total R2) * (Weight X on R3 / Total R3)
     let totalHitProbLine = 0;
     
     // Check all winnable symbols (1 to 7)
@@ -258,7 +253,7 @@ function triggerRecalc() {
         totalHitProbLine += (p1 * p2 * p3);
     }
     
-    // Approx across 5 paylines (Very rough theoretical estimate for admin gauge)
+    // Approx across 5 paylines
     let estHitFreq = Math.min(100, (totalHitProbLine * 5) * 100);
     document.getElementById('calcHitFreq').innerText = estHitFreq.toFixed(2) + '%';
     document.getElementById('barHitFreq').style.width = estHitFreq + '%';
@@ -268,7 +263,7 @@ function triggerRecalc() {
     let lowYieldWeights = 0;
     
     for (let r = 1; r <= 3; r++) {
-        highYieldWeights += weights[r][1] + weights[r][2] + weights[r][3]; // 7, Char, BAR
+        highYieldWeights += weights[r][1] + weights[r][2] + weights[r][3]; // GJP, LOGO, 7
         lowYieldWeights += weights[r][4] + weights[r][5] + weights[r][6] + weights[r][7];
     }
     
@@ -307,7 +302,6 @@ function applyPreset(type) {
             r3: [1, 10, 30, 300, 300, 500, 400]
         },
         teaser: {
-            // High chance of hitting Sym 1 on first two reels, almost impossible on third (Max Suspense)
             r1: [100, 100, 100, 150, 150, 200, 200],
             r2: [100, 100, 100, 150, 150, 200, 200],
             r3: [1, 5, 10, 300, 300, 200, 200]
@@ -323,7 +317,6 @@ function applyPreset(type) {
         }
     }
     
-    // Highlight inputs to show they changed
     document.querySelectorAll('.weight-input').forEach(el => {
         el.classList.add('border-info', 'shadow-[0_0_10px_cyan]');
         setTimeout(() => el.classList.remove('border-info', 'shadow-[0_0_10px_cyan]'), 500);
@@ -360,13 +353,11 @@ function importMatrixJson() {
             }
             triggerRecalc();
             
-            // Visual Highlight for Success
             document.querySelectorAll('.weight-input').forEach(el => {
                 el.classList.add('border-success', 'shadow-[0_0_10px_lime]');
                 setTimeout(() => el.classList.remove('border-success', 'shadow-[0_0_10px_lime]'), 500);
             });
             
-            // Close Modal
             const modalEl = document.getElementById('importModal');
             const modal = bootstrap.Modal.getInstance(modalEl);
             if (modal) modal.hide();
