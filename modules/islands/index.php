@@ -108,6 +108,23 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
 <!-- HTML2PDF CDN FOR REPORT GENERATION -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 
+<style>
+    /* Custom Circuit Chaos Terminal Styles */
+    .terminal-container {
+        background-color: #050505;
+        background-image: radial-gradient(rgba(0, 243, 255, 0.1) 1px, transparent 1px);
+        background-size: 20px 20px;
+        border: 1px solid rgba(0, 243, 255, 0.2);
+        box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.8);
+    }
+    .terminal-line { margin: 0; padding: 0; line-height: 1.4; word-wrap: break-word; }
+    .odometer-box {
+        background: #000; border: 2px solid #333; padding: 5px 10px; border-radius: 8px;
+        font-family: 'JetBrains Mono', monospace; font-size: 1.5rem; font-weight: 900; letter-spacing: 2px;
+        box-shadow: inset 0 0 10px rgba(0,0,0,0.8);
+    }
+</style>
+
 <div class="d-flex justify-content-between align-items-end mb-4">
     <div>
         <h2 class="fw-black text-info italic tracking-widest mb-0"><i class="bi bi-globe-americas"></i> WORLD ENGINE</h2>
@@ -276,26 +293,43 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
     </div>
 </div>
 
-<!-- 1 MILLION SPIN SIMULATION TERMINAL -->
+<!-- 1 MILLION SPIN SIMULATION TERMINAL (RESPONSIVE FULLSCREEN ON MOBILE) -->
 <div class="modal fade" id="simModal" tabindex="-1" data-bs-backdrop="static">
-    <div class="modal-dialog modal-xl modal-dialog-centered">
-        <div class="modal-content border-success" style="background-color: #050505; box-shadow: 0 0 50px rgba(16,185,129,0.2);">
-            <div class="modal-header border-success border-opacity-50 bg-success bg-opacity-10 py-3">
-                <h6 class="modal-title font-mono text-success fw-bold"><i class="bi bi-cpu me-2"></i> LEVIATHAN CORE - 1M SPIN SIMULATOR - <span id="simTitle"></span></h6>
+    <div class="modal-dialog modal-fullscreen-lg-down modal-xl modal-dialog-centered">
+        <div class="modal-content border-info" style="background-color: #050505; box-shadow: 0 0 50px rgba(0,243,255,0.2);">
+            <div class="modal-header border-info border-opacity-50 bg-info bg-opacity-10 py-3">
+                <h6 class="modal-title font-mono text-info fw-bold"><i class="bi bi-cpu me-2"></i> LEVIATHAN CORE - 1M SPIN SIMULATOR - <span id="simTitle"></span></h6>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" onclick="stopSimulation()"></button>
             </div>
+            
+            <!-- Live Telemetry Banner -->
+            <div class="bg-dark border-bottom border-secondary p-3 d-flex flex-wrap gap-4 align-items-center justify-content-center shadow-inner">
+                <div class="text-center">
+                    <div class="text-gray-500 font-mono text-[10px] uppercase tracking-widest fw-bold">Spins Processed</div>
+                    <div class="odometer-box text-white" id="liveOdometer">0</div>
+                </div>
+                <div class="text-center">
+                    <div class="text-gray-500 font-mono text-[10px] uppercase tracking-widest fw-bold">Live RTP</div>
+                    <div class="odometer-box text-info" id="liveRtp">0.00%</div>
+                </div>
+                <div class="text-center">
+                    <div class="text-gray-500 font-mono text-[10px] uppercase tracking-widest fw-bold">Net PNL (MMK)</div>
+                    <div class="odometer-box text-success" id="livePnl">0</div>
+                </div>
+            </div>
+
             <div class="modal-body p-0 d-flex flex-column flex-lg-row">
                 
-                <!-- Terminal Output -->
-                <div id="simTerminal" class="p-4 font-mono text-xs hide-scrollbar flex-grow-1" style="height: 450px; overflow-y: auto; background-color: #000; color: #0f0; white-space: pre-wrap; line-height: 1.5; border-right: 1px solid rgba(16,185,129,0.3);">
-                    > Initialization sequence started...
+                <!-- Terminal Output (Left/Top) -->
+                <div class="terminal-container p-4 font-mono text-xs hide-scrollbar flex-grow-1" style="height: 50vh; min-height: 400px; overflow-y: auto; color: #0f0;">
+                    <div id="simTerminal"></div>
                 </div>
                 
-                <!-- Exportable Results Dashboard -->
-                <div id="simResultsContainer" class="bg-dark" style="width: 350px; min-width: 300px;">
+                <!-- Exportable Results Dashboard (Right/Bottom) -->
+                <div id="simResultsContainer" class="bg-dark border-start border-secondary" style="flex: 0 0 350px; overflow-y: auto;">
                     <div id="simResults" class="p-4 d-none bg-dark h-100">
                         <div class="text-center mb-3 border-bottom border-secondary pb-2">
-                            <h5 class="text-success font-mono fw-black mb-0">RTP AUDIT REPORT</h5>
+                            <h5 class="text-info font-mono fw-black mb-0">RTP AUDIT REPORT</h5>
                             <small class="text-muted font-mono" id="reportDate"></small>
                         </div>
                         
@@ -306,11 +340,11 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
                             </div>
                             <div class="p-2 border border-secondary rounded bg-black bg-opacity-50 d-flex justify-content-between align-items-center">
                                 <span class="text-muted" style="font-size: 10px;">THEORETICAL RTP</span>
-                                <span class="text-info fs-5 fw-bold" id="resTheory">0%</span>
+                                <span class="text-gray-300 fs-5 fw-bold" id="resTheory">0%</span>
                             </div>
-                            <div class="p-2 border border-success rounded bg-success bg-opacity-20 d-flex justify-content-between align-items-center shadow-[0_0_15px_rgba(16,185,129,0.3)]">
-                                <span class="text-success" style="font-size: 10px;">ACTUAL RTP</span>
-                                <span class="text-success fs-3 fw-black drop-shadow-md" id="resActual">0%</span>
+                            <div class="p-2 border border-info rounded bg-info bg-opacity-20 d-flex justify-content-between align-items-center shadow-[0_0_15px_rgba(0,243,255,0.3)]">
+                                <span class="text-info" style="font-size: 10px;">ACTUAL RTP</span>
+                                <span class="text-info fs-3 fw-black drop-shadow-md" id="resActual">0%</span>
                             </div>
                             <div class="p-2 border border-secondary rounded bg-black bg-opacity-50 d-flex justify-content-between align-items-center">
                                 <span class="text-muted" style="font-size: 10px;">HIT FREQUENCY</span>
@@ -328,8 +362,8 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
                 </div>
             </div>
             
-            <div class="modal-footer border-success border-opacity-30 bg-black">
-                <button type="button" id="btnPdfExport" class="btn btn-outline-success fw-bold font-mono d-none shadow-[0_0_10px_lime]" onclick="exportPDF()">
+            <div class="modal-footer border-info border-opacity-30 bg-black">
+                <button type="button" id="btnPdfExport" class="btn btn-outline-info fw-bold font-mono d-none shadow-[0_0_10px_cyan]" onclick="exportPDF()">
                     <i class="bi bi-file-earmark-pdf-fill me-2"></i> DOWNLOAD PDF REPORT
                 </button>
             </div>
@@ -380,7 +414,22 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
         document.getElementById('simResults').classList.add('d-none');
         document.getElementById('btnPdfExport').classList.add('d-none');
         
-        term.innerHTML = `> Establishing mathematical sandbox for [${island.name}]...\n> Fetching DNA Spawn Rates...\n> Fetching Database Multipliers...\n> Target Base RTP: ${island.rtp_rate}%\n> Executing ONE MILLION (1,000,000) spins at 1,000 MMK bet...\n\n`;
+        // Reset Odometers
+        document.getElementById('liveOdometer').innerText = '0';
+        document.getElementById('liveRtp').innerText = '0.00%';
+        document.getElementById('livePnl').innerText = '0';
+        document.getElementById('livePnl').className = 'odometer-box text-muted';
+        
+        // Rolling Log Array for performance
+        let logBuffer = [
+            `> System Initialization for [${island.name}]...`,
+            `> Fetching DNA Spawn Rates & DB Multipliers...`,
+            `> Target Base RTP: <span style="color:#0ff">${island.rtp_rate}%</span>`,
+            `> Executing 1,000,000 spins at 1,000 MMK bet...`,
+            `--------------------------------------------------`
+        ];
+        
+        term.innerHTML = logBuffer.join('<br/>');
         
         new bootstrap.Modal(document.getElementById('simModal')).show();
 
@@ -393,7 +442,6 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
             4: parseFloat(pouts.sym_4_mult), 5: parseFloat(pouts.sym_5_mult), 6: parseFloat(pouts.sym_6_mult), 7: parseFloat(pouts.sym_7_mult)
         };
         
-        // Standard win weights mapping (mirrors spin.php)
         const winSymWeights = {2: 5, 3: 10, 4: 25, 5: 20, 6: 25, 7: 15};
         
         const pickSymbol = (weightsObj) => {
@@ -421,16 +469,18 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
         };
 
         let spins = 0;
-        const MAX_SPINS = 1000000; // 1 MILLION
-        const BATCH_SIZE = 50000; // 50k per tick to prevent browser crash
+        const MAX_SPINS = 1000000;
+        const BATCH_SIZE = 10000; // 10k per tick for visual smoothness & log streaming
         
         let totalIn = 0;
         let totalOut = 0;
         let totalWinningSpins = 0;
         let hits = {1:0, 2:0, 3:0, 4:0, 5:0, 6:0, 7:0}; 
+        
+        const symbolIcons = {1:'[7]', 2:'[CHR]', 3:'[BAR]', 4:'[BEL]', 5:'[MEL]', 6:'[CHE]', 7:'[REP]'};
 
         simInterval = setInterval(() => {
-            let massiveWins = [];
+            let batchLogs = [];
             
             for(let b=0; b<BATCH_SIZE && spins < MAX_SPINS; b++) {
                 spins++;
@@ -450,27 +500,41 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
                     
                     if (winAmt > 0) totalWinningSpins++;
                     
-                    // Log mega hits for terminal visual flair
-                    if (multipliers[winSym] >= 20) {
-                        massiveWins.push(`[SPIN ${spins}] MEGA HIT: Symbol ${winSym} Paid +${winAmt.toLocaleString()} MMK`);
+                    // Detailed Log for High Tier Hits (> 15x)
+                    if (multipliers[winSym] >= 15) {
+                        batchLogs.push(`<div class="terminal-line"><span style="color:#0aa">[#${spins.toString().padStart(7,'0')}]</span> HIT! ${symbolIcons[winSym]}x3 -> <span style="color:#ff0">+${winAmt.toLocaleString()} MMK</span> (x${multipliers[winSym]})</div>`);
                     }
                 }
             }
 
-            // Update terminal with batch progress
-            let pct = ((spins / MAX_SPINS) * 100).toFixed(0);
-            let termMsg = `> Processing Batch... [${pct}%] - ${spins.toLocaleString()} spins completed.\n`;
-            if (massiveWins.length > 0) {
-                termMsg += `<span style="color:#ff0;">   ↳ Caught ${massiveWins.length} high-tier multiplier hits in this batch.</span>\n`;
+            // Milestone Logging
+            if (spins % 50000 === 0) {
+                batchLogs.push(`<div class="terminal-line" style="color:#fff; font-weight:bold;">> MILESTONE: Processed ${spins.toLocaleString()} spins. Current RTP balancing...</div>`);
             }
+
+            // Update Terminal DOM efficiently
+            if (batchLogs.length > 0) {
+                logBuffer = logBuffer.concat(batchLogs);
+                // Keep only last 100 lines to prevent DOM freeze
+                if (logBuffer.length > 100) logBuffer = logBuffer.slice(logBuffer.length - 100);
+                term.innerHTML = logBuffer.join('');
+                term.scrollTop = term.scrollHeight;
+            }
+
+            // Update Live Odometers
+            let currentRtp = ((totalOut / totalIn) * 100).toFixed(2);
+            let currentPnl = totalIn - totalOut;
             
-            term.innerHTML += termMsg;
-            term.scrollTop = term.scrollHeight;
+            document.getElementById('liveOdometer').innerText = spins.toLocaleString();
+            document.getElementById('liveRtp').innerText = currentRtp + '%';
+            document.getElementById('livePnl').innerText = currentPnl > 0 ? '+' + currentPnl.toLocaleString() : currentPnl.toLocaleString();
+            document.getElementById('livePnl').className = `odometer-box ${currentPnl >= 0 ? 'text-success' : 'text-danger'}`;
 
             // END OF SIMULATION
             if (spins >= MAX_SPINS) {
                 clearInterval(simInterval);
-                term.innerHTML += `\n<span style="color:#0f0; font-weight:bold;">> 1,000,000 SPINS COMPLETE. COMPILING PDF REPORT...</span>\n`;
+                logBuffer.push(`<div class="terminal-line mt-3" style="color:#0f0; font-weight:900;">> SIMULATION COMPLETE. TERMINATING LOOP.</div>`);
+                term.innerHTML = logBuffer.join('');
                 term.scrollTop = term.scrollHeight;
                 
                 let actualRtp = ((totalOut / totalIn) * 100).toFixed(2);
@@ -485,18 +549,18 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
                 const actEl = document.getElementById('resActual');
                 if (diff > 3) actEl.className = "text-danger fs-3 fw-black drop-shadow-[0_0_10px_red] animate-pulse";
                 else if (diff < -3) actEl.className = "text-warning fs-3 fw-black";
-                else actEl.className = "text-success fs-3 fw-black drop-shadow-[0_0_10px_lime]";
+                else actEl.className = "text-info fs-3 fw-black drop-shadow-[0_0_10px_cyan]";
 
                 // Distribution Matrix
                 const totalSyms = MAX_SPINS * 3;
-                const names = {1:'GJP', 2:'Char', 3:'BAR', 4:'Bell', 5:'Melon', 6:'Cherry', 7:'Replay'};
+                const names = {1:'GJP/7', 2:'Char', 3:'BAR', 4:'Bell', 5:'Melon', 6:'Cherry', 7:'Replay'};
                 const colors = {1:'#ef4444', 2:'#a855f7', 3:'#f97316', 4:'#eab308', 5:'#22c55e', 6:'#ec4899', 7:'#06b6d4'};
                 
                 let distHtml = '';
                 for(let i=1; i<=7; i++) {
                     let pct = ((hits[i] / totalSyms) * 100).toFixed(2);
                     distHtml += `
-                        <div class="col-6 mb-2">
+                        <div class="col-6 col-md-12 mb-2">
                             <div class="d-flex justify-content-between align-items-center border-bottom border-secondary pb-1">
                                 <span style="color:${colors[i]}; font-weight:bold;">${names[i]}</span>
                                 <span class="text-white">${pct}%</span>
@@ -508,7 +572,7 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
                 document.getElementById('simResults').classList.remove('d-none');
                 document.getElementById('btnPdfExport').classList.remove('d-none');
             }
-        }, 50); 
+        }, 30); // ~30ms per 10k batch for smooth visual streaming
     }
 
     function stopSimulation() {
@@ -519,7 +583,7 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
     function exportPDF() {
         const element = document.getElementById('simResults');
         
-        // Add a temporary white background just for the PDF render
+        // Add a temporary background just for the PDF render
         element.classList.add('bg-dark', 'p-4');
         
         const opt = {
@@ -531,7 +595,8 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
         };
 
         html2pdf().set(opt).from(element).save().then(() => {
-            // Optional: Revert styles if needed
+            // Revert styles
+            element.classList.remove('bg-dark', 'p-4');
         });
     }
 </script>
