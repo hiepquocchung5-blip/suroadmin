@@ -65,7 +65,7 @@ $currentRoute = $_GET['route'] ?? 'dashboard';
             transition: background-color 0.3s, color 0.3s;
         }
         
-        /* Layout Transitions */
+        /* Layout Transitions & Sidebar Toggle */
         .sidebar { 
             width: var(--sidebar-width); 
             position: fixed; 
@@ -74,15 +74,54 @@ $currentRoute = $_GET['route'] ?? 'dashboard';
             height: 100vh; 
             background: var(--bg-sidebar); 
             border-right: 1px solid var(--sidebar-border); 
-            z-index: 1000; 
+            z-index: 1040; 
             overflow-y: auto;
-            transition: background-color 0.3s;
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.3s;
         }
+        
         .main-wrapper { 
             margin-left: var(--sidebar-width); 
             min-height: 100vh; 
             display: flex; 
-            flex-direction: column; 
+            flex-direction: column;
+            transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        /* Desktop Collapsed State */
+        @media (min-width: 992px) {
+            body.sidebar-collapsed .sidebar {
+                transform: translateX(-100%);
+            }
+            body.sidebar-collapsed .main-wrapper {
+                margin-left: 0;
+            }
+        }
+
+        /* Mobile Responsive State */
+        @media (max-width: 991.98px) {
+            .sidebar {
+                transform: translateX(-100%);
+            }
+            .main-wrapper {
+                margin-left: 0;
+            }
+            body.sidebar-open .sidebar {
+                transform: translateX(0);
+            }
+            #sidebar-overlay {
+                display: none;
+                position: fixed; 
+                inset: 0; 
+                background: rgba(0,0,0,0.6); 
+                z-index: 1030; 
+                backdrop-filter: blur(3px);
+                opacity: 0;
+                transition: opacity 0.3s;
+            }
+            body.sidebar-open #sidebar-overlay {
+                display: block;
+                opacity: 1;
+            }
         }
         
         /* Glass Components */
@@ -101,9 +140,7 @@ $currentRoute = $_GET['route'] ?? 'dashboard';
         .nav-link:hover { color: var(--text-main); background: rgba(128,128,128,0.05); }
         .nav-link.active { color: var(--accent); background: rgba(128,128,128,0.05); border-left-color: var(--accent); font-weight: 600; }
         
-        /* --- AUTO-OVERRIDE HACKS FOR LIGHT MODE ---
-           This magic block converts all the hardcoded Bootstrap "bg-dark" and "text-white" 
-           classes in your modules into luxury light mode equivalents automatically! */
+        /* --- AUTO-OVERRIDE HACKS FOR LIGHT MODE --- */
         [data-bs-theme="light"] .bg-dark,
         [data-bs-theme="light"] .bg-black,
         [data-bs-theme="light"] .card.bg-dark {
@@ -149,26 +186,15 @@ $currentRoute = $_GET['route'] ?? 'dashboard';
             color: #2d3436 !important;
             border-color: #cbd5e1 !important;
         }
-
-        /* Strict Mobile Landscape Enforcer */
-        #rotate-device-overlay { display: none; position: fixed; inset: 0; background: var(--bg-main); z-index: 9999; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 20px; }
-        @media screen and (max-width: 800px) and (orientation: portrait) {
-            #rotate-device-overlay { display: flex; }
-            .sidebar, .main-wrapper { display: none; }
-        }
     </style>
 </head>
 <body>
 
-<!-- MOBILE ENFORCEMENT -->
-<div id="rotate-device-overlay">
-    <i class="bi bi-phone-landscape mb-4" style="font-size: 4rem; color: var(--accent);"></i>
-    <h3 class="fw-black tracking-widest uppercase" style="color: var(--text-main);">Rotate Device</h3>
-    <p class="small mt-2 max-w-sm" style="color: var(--text-muted);">The Leviathan Admin Portal requires a wide workspace to display high-density telemetry data.</p>
-</div>
+<!-- MOBILE SIDEBAR OVERLAY -->
+<div id="sidebar-overlay" onclick="toggleSidebar()"></div>
 
 <!-- SIDEBAR -->
-<div class="sidebar hide-scrollbar">
+<div class="sidebar hide-scrollbar shadow-lg">
     <div class="d-flex align-items-center justify-content-center" style="height: var(--header-height); border-bottom: 1px solid var(--sidebar-border); position: sticky; top:0; background: var(--bg-sidebar); z-index: 10;">
         <h5 class="m-0 fw-black tracking-widest" style="color: var(--accent);"><i class="bi bi-cpu"></i> SUROPARA V2</h5>
     </div>
@@ -198,30 +224,39 @@ $currentRoute = $_GET['route'] ?? 'dashboard';
         <a href="?route=marketing/jackpots" class="nav-link <?= $currentRoute == 'marketing/jackpots' ? 'active' : '' ?>"><i class="bi bi-trophy"></i> Jackpots</a>
         
         <div class="nav-category">System</div>
-        <a href="?route=security/monitor" class="nav-link <?= $currentRoute == 'security/monitor' ? 'active' : '' ?>"><i class="bi bi-shield-lock"></i> Security</a>
-        <a href="?route=staff/manage" class="nav-link <?= $currentRoute == 'staff/manage' ? 'active' : '' ?>"><i class="bi bi-person-badge"></i> Staff</a>
+        <a href="?route=security/monitor" class="nav-link <?= $currentRoute == 'security/monitor' ? 'active' : '' ?>"><i class="bi bi-shield-lock"></i> Security Radar</a>
+        <a href="?route=system/cleanup" class="nav-link <?= $currentRoute == 'system/cleanup' ? 'active' : '' ?>"><i class="bi bi-trash3"></i> Maintenance & Logs</a>
+        <a href="?route=staff/manage" class="nav-link <?= $currentRoute == 'staff/manage' ? 'active' : '' ?>"><i class="bi bi-person-badge"></i> Staff Controls</a>
         <a href="?route=config/global" class="nav-link <?= $currentRoute == 'config/global' ? 'active' : '' ?>"><i class="bi bi-sliders"></i> Configuration</a>
+        <a href="#" class="nav-link" onclick="alert('API Webhooks module coming in next update.');"><i class="bi bi-diagram-2"></i> API Webhooks</a>
+        <a href="#" class="nav-link" onclick="alert('Database Backup module coming in next update.');"><i class="bi bi-database-down"></i> DB Backups</a>
     </div>
 </div>
 
 <!-- MAIN WRAPPER -->
 <div class="main-wrapper">
     <!-- TOP HEADER -->
-    <div class="px-4 d-flex justify-content-between align-items-center border-bottom sticky-top z-30" style="height: var(--header-height); background: var(--bg-header); border-color: var(--sidebar-border) !important;">
-        <h5 class="m-0 fw-bold" style="color: var(--text-main);"><?= $pageTitle ?? 'Control Panel' ?></h5>
+    <div class="px-4 d-flex justify-content-between align-items-center border-bottom sticky-top z-30 shadow-sm" style="height: var(--header-height); background: var(--bg-header); border-color: var(--sidebar-border) !important;">
         
         <div class="d-flex align-items-center gap-3">
-            
+            <!-- SIDEBAR TOGGLE BUTTON -->
+            <button onclick="toggleSidebar()" class="btn btn-sm rounded d-flex align-items-center justify-content-center hover:scale-105 transition-transform" style="width: 36px; height: 36px; border: 1px solid var(--border-color); background: var(--bg-card); color: var(--text-main);">
+                <i class="bi bi-list fs-5"></i>
+            </button>
+            <h5 class="m-0 fw-bold d-none d-sm-block" style="color: var(--text-main);"><?= $pageTitle ?? 'Control Panel' ?></h5>
+        </div>
+        
+        <div class="d-flex align-items-center gap-3">
             <!-- THEME TOGGLE BUTTON -->
             <button onclick="toggleTheme()" class="btn btn-sm rounded-circle d-flex align-items-center justify-content-center" style="width: 32px; height: 32px; border: 1px solid var(--border-color); background: var(--bg-card); color: var(--text-main);">
                 <i id="theme-icon" class="bi bi-moon-stars-fill"></i>
             </button>
 
-            <div class="d-flex align-items-center gap-2 px-3 py-1 rounded-pill" style="background: var(--bg-card); border: 1px solid var(--border-color);">
+            <div class="d-none d-md-flex align-items-center gap-2 px-3 py-1 rounded-pill" style="background: var(--bg-card); border: 1px solid var(--border-color);">
                 <span class="spinner-grow spinner-grow-sm text-success" style="width: 8px; height: 8px;"></span>
                 <span class="fw-bold font-mono" style="font-size: 0.65rem; color: var(--text-main);">SECURE CONNECTION</span>
             </div>
-            <a href="?logout=true" class="btn btn-sm btn-outline-danger fw-bold"><i class="bi bi-power"></i> DISCONNECT</a>
+            <a href="?logout=true" class="btn btn-sm btn-outline-danger fw-bold"><i class="bi bi-power"></i> <span class="d-none d-sm-inline">DISCONNECT</span></a>
         </div>
     </div>
 
@@ -244,7 +279,18 @@ $currentRoute = $_GET['route'] ?? 'dashboard';
                 icon.className = 'bi bi-brightness-high-fill'; // Next action is to turn light
             }
         }
+
+        // Sidebar Toggle Logic
+        function toggleSidebar() {
+            if (window.innerWidth >= 992) {
+                // Desktop: Toggle collapsed state
+                document.body.classList.toggle('sidebar-collapsed');
+            } else {
+                // Mobile: Toggle open state
+                document.body.classList.toggle('sidebar-open');
+            }
+        }
     </script>
 
     <!-- PAGE CONTENT -->
-    <div class="p-4 flex-grow-1">
+    <div class="p-3 p-md-4 flex-grow-1">
