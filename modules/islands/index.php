@@ -172,6 +172,21 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
     .nav-tabs .nav-link { color: #94a3b8; border: none; border-bottom: 2px solid transparent; font-weight: bold; text-transform: uppercase; font-size: 0.8rem; letter-spacing: 1px; }
     .nav-tabs .nav-link:hover { border-color: rgba(255,255,255,0.1); color: #fff; }
     .nav-tabs .nav-link.active { color: #00f3ff; border-bottom: 2px solid #00f3ff; background: rgba(0, 243, 255, 0.05); }
+    
+    /* Terminal Output for Sim */
+    .terminal-container {
+        background-color: #050505;
+        background-image: radial-gradient(rgba(0, 243, 255, 0.1) 1px, transparent 1px);
+        background-size: 20px 20px;
+        border: 1px solid rgba(0, 243, 255, 0.2);
+        box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.8);
+    }
+    .terminal-line { margin: 0; padding: 0; line-height: 1.4; word-wrap: break-word; }
+    .odometer-box {
+        background: #000; border: 2px solid #333; padding: 5px 10px; border-radius: 8px;
+        font-family: 'JetBrains Mono', monospace; font-size: 1.5rem; font-weight: 900; letter-spacing: 2px;
+        box-shadow: inset 0 0 10px rgba(0,0,0,0.8);
+    }
 </style>
 
 <div class="cyber-grid w-100 h-100 absolute top-0 left-0 -z-10"></div>
@@ -217,6 +232,9 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
         $wr = $winRatesByIsland[$isl['id']];
         $activeLinks = $activePlayersQuery[$isl['id']] ?? 0;
         $isActive = $isl['is_active'];
+        
+        $rtpColor = $isl['rtp_rate'] > 85 ? 'text-danger' : ($isl['rtp_rate'] < 60 ? 'text-info' : 'text-success');
+        $insightData = $islandInsights[$isl['id']];
     ?>
     <div class="col-md-6 col-xl-4">
         <div class="glass-card h-100 overflow-hidden position-relative group d-flex flex-column transition-colors shadow-[0_0_20px_rgba(0,0,0,0.4)] <?= $isActive ? 'border-info border-opacity-30 hover:border-opacity-100' : 'border-danger border-opacity-50 grayscale-[40%]' ?>">
@@ -259,7 +277,7 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
                         <span class="text-gray-400">Target RTP: <span class="text-white"><?= number_format($isl['rtp_rate'], 1) ?>%</span></span>
                     </div>
                     <div class="d-flex justify-content-between text-[10px] text-gray-300">
-                        <span>Base Hit: <span class="text-white fw-bold"><?= number_format($wr['base_hit_rate'], 2) ?>%</span></span>
+                        <span>Base Hit: <span class="text-white fw-bold"><?= number_format($wr['base_hit_rate'], 4) ?>%</span></span>
                         <span>Hard Cap: <span class="text-white fw-bold"><?= number_format($wr['max_rtp_cap'], 2) ?>%</span></span>
                     </div>
                 </div>
@@ -276,6 +294,11 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
                     <a href="?route=content/spawn_rates&island=<?= $isl['id'] ?>" class="btn btn-outline-warning w-100 fw-bold py-2 shadow-sm text-[11px] tracking-widest hover:bg-warning hover:text-black transition-colors">
                         <i class="bi bi-gear-wide-connected"></i> ADJUST SPAWN RATES
                     </a>
+
+                    <!-- QUICK SIM -->
+                    <button class="btn w-100 fw-black py-2 shadow-[0_0_15px_rgba(59,130,246,0.3)] text-[11px] tracking-widest hover:scale-105 active:scale-95 transition-transform" style="background: linear-gradient(90deg, #3b82f6, #2563eb); color: #fff;" onclick="startSimulation(<?= $isl['id'] ?>)">
+                        <i class="bi bi-lightning-charge-fill me-1"></i> QUICK SIM (10K SPINS)
+                    </button>
                     
                     <!-- ECOSYSTEM CONTROLS -->
                     <div class="row g-2 mt-1">
@@ -334,6 +357,67 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
                 <?php endforeach; if(empty($auditLogs)) echo '<tr><td colspan="3" class="text-center py-4 text-muted">No recent configuration changes logged.</td></tr>'; ?>
             </tbody>
         </table>
+    </div>
+</div>
+
+<!-- QUICK 10K SPIN SIMULATION MODAL -->
+<div class="modal fade" id="simModal" tabindex="-1" data-bs-backdrop="static">
+    <div class="modal-dialog modal-fullscreen-lg-down modal-xl modal-dialog-centered">
+        <div class="modal-content border-info" style="background-color: #050505; box-shadow: 0 0 50px rgba(0,243,255,0.2);">
+            <div class="modal-header border-info border-opacity-50 bg-info bg-opacity-10 py-3">
+                <h6 class="modal-title font-mono text-info fw-bold"><i class="bi bi-lightning-charge me-2"></i> QUICK SIM (10K) - <span id="simTitle"></span></h6>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" onclick="stopSimulation()"></button>
+            </div>
+            
+            <div class="bg-dark border-bottom border-secondary p-3 d-flex flex-wrap gap-4 align-items-center justify-content-center shadow-inner">
+                <div class="text-center">
+                    <div class="text-gray-500 font-mono text-[10px] uppercase tracking-widest fw-bold">Spins Processed</div>
+                    <div class="odometer-box text-white" id="liveOdometer">0</div>
+                </div>
+                <div class="text-center">
+                    <div class="text-gray-500 font-mono text-[10px] uppercase tracking-widest fw-bold">Live RTP</div>
+                    <div class="odometer-box text-info" id="liveRtp">0.00%</div>
+                </div>
+            </div>
+
+            <div class="modal-body p-0 d-flex flex-column flex-lg-row">
+                <!-- Terminal Output -->
+                <div class="terminal-container p-4 font-mono text-xs hide-scrollbar flex-grow-1" style="height: 50vh; min-height: 400px; overflow-y: auto; color: #0f0;">
+                    <div id="simTerminal"></div>
+                </div>
+                
+                <!-- Results Dashboard -->
+                <div id="simResultsContainer" class="bg-dark border-start border-secondary" style="flex: 0 0 350px; overflow-y: auto;">
+                    <div id="simResults" class="p-4 d-none bg-dark h-100">
+                        <div class="text-center mb-3 border-bottom border-secondary pb-2">
+                            <h5 class="text-info font-mono fw-black mb-0">QUICK AUDIT</h5>
+                        </div>
+                        
+                        <div class="d-grid gap-2 font-mono mb-4">
+                            <div class="p-2 border border-secondary rounded bg-black bg-opacity-50 d-flex justify-content-between align-items-center">
+                                <span class="text-muted" style="font-size: 10px;">THEORETICAL RTP</span>
+                                <span class="text-gray-300 fs-5 fw-bold" id="resTheory">0%</span>
+                            </div>
+                            <div class="p-2 border border-info rounded bg-info bg-opacity-20 d-flex justify-content-between align-items-center shadow-[0_0_15px_rgba(0,243,255,0.3)]">
+                                <span class="text-info" style="font-size: 10px;">ACTUAL RTP</span>
+                                <span class="text-info fs-3 fw-black drop-shadow-md" id="resActual">0%</span>
+                            </div>
+                        </div>
+                        
+                        <h6 class="text-gray-400 font-mono text-[10px] uppercase tracking-widest mb-2 border-bottom border-secondary pb-1">Symbol Drops</h6>
+                        <div class="text-[10px] text-gray-300 font-mono">
+                            <div class="row text-center g-2" id="symDistro"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="modal-footer border-info border-opacity-30 bg-black">
+                <a href="?route=content/simulate" class="btn btn-outline-danger fw-bold font-mono">
+                    <i class="bi bi-radioactive me-2"></i> OPEN DEEP SIMULATOR (1M SPINS)
+                </a>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -515,6 +599,148 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
         firstTab.show();
 
         new bootstrap.Modal(document.getElementById('editIslandModal')).show();
+    }
+
+    // --- QUICK 10K SIMULATION ---
+    const DB_ISLANDS = <?= json_encode($islands) ?>;
+    const DB_SPAWN_RATES = <?= json_encode($spawnRatesByIsland) ?>;
+    const DB_PAYOUTS = <?= json_encode($payoutsByIsland) ?>;
+    const DB_WIN_RATES = <?= json_encode($winRatesByIsland) ?>;
+    
+    let simInterval = null;
+
+    function startSimulation(islandId) {
+        const island = DB_ISLANDS.find(i => parseInt(i.id) === islandId);
+        const rates = DB_SPAWN_RATES[islandId];
+        const pouts = DB_PAYOUTS[islandId];
+        const wRates = DB_WIN_RATES[islandId];
+        
+        document.getElementById('simTitle').innerText = island.name;
+        const term = document.getElementById('simTerminal');
+        document.getElementById('simResults').classList.add('d-none');
+        
+        document.getElementById('liveOdometer').innerText = '0';
+        document.getElementById('liveRtp').innerText = '0.00%';
+        
+        let logBuffer = [
+            `> Initializing Quick Sim for [${island.name}]...`,
+            `> Target Base RTP: <span style="color:#0ff">${island.rtp_rate}%</span>`,
+            `> Executing 10,000 spins at 1,000 MMK bet...`,
+            `--------------------------------------------------`
+        ];
+        term.innerHTML = logBuffer.join('<br/>');
+        
+        new bootstrap.Modal(document.getElementById('simModal')).show();
+
+        const bet = 1000;
+        const targetRtp = parseFloat(island.rtp_rate);
+        const baseHitRate = parseFloat(wRates.base_hit_rate);
+        
+        const multipliers = {
+            1: parseFloat(pouts.sym_1_mult), 2: parseFloat(pouts.sym_2_mult), 3: parseFloat(pouts.sym_3_mult),
+            4: parseFloat(pouts.sym_4_mult), 5: parseFloat(pouts.sym_5_mult), 6: parseFloat(pouts.sym_6_mult), 7: parseFloat(pouts.sym_7_mult)
+        };
+        const winSymWeights = {2: 5, 3: 10, 4: 25, 5: 20, 6: 25, 7: 15};
+        
+        const pickSymbol = (weightsObj) => {
+            const arr = Object.values(weightsObj);
+            const total = arr.reduce((a,b)=>a+parseInt(b), 0);
+            let rand = Math.floor(Math.random() * total) + 1;
+            let sum = 0;
+            for(let i=1; i<=7; i++) {
+                sum += parseInt(weightsObj[`sym_${i}`]);
+                if (rand <= sum) return i;
+            }
+            return 7;
+        };
+
+        const pickWinSymbol = () => {
+            const arr = Object.values(winSymWeights);
+            const total = arr.reduce((a,b)=>a+b, 0);
+            let rand = Math.floor(Math.random() * total) + 1;
+            let sum = 0;
+            for (let [sym, w] of Object.entries(winSymWeights)) {
+                sum += w;
+                if (rand <= sum) return parseInt(sym);
+            }
+            return 7;
+        };
+
+        let spins = 0;
+        const MAX_SPINS = 10000; // Quick Sim limit
+        const BATCH_SIZE = 1000; 
+        
+        let totalIn = 0, totalOut = 0, totalWinningSpins = 0;
+        let hits = {1:0, 2:0, 3:0, 4:0, 5:0, 6:0, 7:0}; 
+        const symbolIcons = {1:'[7]', 2:'[CHR]', 3:'[BAR]', 4:'[BEL]', 5:'[MEL]', 6:'[CHE]', 7:'[REP]'};
+
+        simInterval = setInterval(() => {
+            let batchLogs = [];
+            for(let b=0; b<BATCH_SIZE && spins < MAX_SPINS; b++) {
+                spins++;
+                totalIn += bet;
+
+                let r1 = pickSymbol(rates[1]); let r2 = pickSymbol(rates[2]); let r3 = pickSymbol(rates[3]);
+                hits[r1]++; hits[r2]++; hits[r3]++;
+
+                // Ultra High Precision JS Simulator Hit Engine (V5.5)
+                let isHit = (Math.random() * 10000000000) <= (baseHitRate * 100000000);
+                
+                if (isHit) {
+                    let winSym = pickWinSymbol();
+                    let winAmt = bet * multipliers[winSym];
+                    totalOut += winAmt;
+                    if (winAmt > 0) totalWinningSpins++;
+                    
+                    if (multipliers[winSym] >= 10) {
+                        batchLogs.push(`<div class="terminal-line"><span style="color:#0aa">[#${spins.toString().padStart(5,'0')}]</span> HIT! ${symbolIcons[winSym]}x3 -> <span style="color:#ff0">+${winAmt.toLocaleString()} MMK</span></div>`);
+                    }
+                }
+            }
+
+            if (batchLogs.length > 0) {
+                logBuffer = logBuffer.concat(batchLogs);
+                if (logBuffer.length > 100) logBuffer = logBuffer.slice(logBuffer.length - 100);
+                term.innerHTML = logBuffer.join('');
+                term.scrollTop = term.scrollHeight;
+            }
+
+            let currentRtp = ((totalOut / totalIn) * 100).toFixed(2);
+            document.getElementById('liveOdometer').innerText = spins.toLocaleString();
+            document.getElementById('liveRtp').innerText = currentRtp + '%';
+
+            if (spins >= MAX_SPINS) {
+                clearInterval(simInterval);
+                logBuffer.push(`<div class="terminal-line mt-3" style="color:#0f0; font-weight:900;">> QUICK SIM COMPLETE.</div>`);
+                term.innerHTML = logBuffer.join('');
+                term.scrollTop = term.scrollHeight;
+                
+                let actualRtp = ((totalOut / totalIn) * 100).toFixed(2);
+                document.getElementById('resTheory').innerText = `${targetRtp.toFixed(2)}%`;
+                document.getElementById('resActual').innerText = `${actualRtp}%`;
+                
+                const diff = actualRtp - targetRtp;
+                const actEl = document.getElementById('resActual');
+                if (diff > 3) actEl.className = "text-danger fs-3 fw-black drop-shadow-[0_0_10px_red] animate-pulse";
+                else if (diff < -3) actEl.className = "text-warning fs-3 fw-black";
+                else actEl.className = "text-info fs-3 fw-black drop-shadow-[0_0_10px_cyan]";
+
+                const totalSyms = MAX_SPINS * 3;
+                const names = {1:'GJP/7', 2:'Char', 3:'BAR', 4:'Bell', 5:'Melon', 6:'Cherry', 7:'Replay'};
+                const colors = {1:'#ef4444', 2:'#a855f7', 3:'#f97316', 4:'#eab308', 5:'#22c55e', 6:'#ec4899', 7:'#06b6d4'};
+                let distHtml = '';
+                for(let i=1; i<=7; i++) {
+                    let pct = ((hits[i] / totalSyms) * 100).toFixed(2);
+                    distHtml += `<div class="col-12 mb-2"><div class="d-flex justify-content-between border-bottom border-secondary pb-1"><span style="color:${colors[i]}; font-weight:bold;">${names[i]}</span><span class="text-white">${pct}%</span></div></div>`;
+                }
+                document.getElementById('symDistro').innerHTML = distHtml;
+                document.getElementById('simResults').classList.remove('d-none');
+            }
+        }, 30); 
+    }
+
+    function stopSimulation() {
+        if (simInterval) clearInterval(simInterval);
     }
 </script>
 <?php endif; ?>
