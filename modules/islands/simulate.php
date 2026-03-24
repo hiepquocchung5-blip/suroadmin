@@ -60,6 +60,12 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
         font-family: 'JetBrains Mono', monospace; font-size: 2rem; font-weight: 900; letter-spacing: 2px;
         box-shadow: inset 0 0 15px rgba(0,0,0,0.9);
     }
+
+    .matrix-table th, .matrix-table td {
+        border-color: rgba(255,255,255,0.1);
+        padding: 0.5rem;
+        vertical-align: middle;
+    }
 </style>
 
 <div class="d-flex justify-content-between align-items-end mb-4">
@@ -69,7 +75,7 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
         </h2>
         <p class="text-muted small mt-1 font-mono">Execute high-volume mathematical integrity audits across isolated server environments.</p>
     </div>
-    <a href="?route=content/islands" class="btn btn-outline-secondary fw-bold rounded-pill px-4">
+    <a href="?route=content/islands" class="btn btn-outline-secondary fw-bold rounded-pill px-4 shadow-sm hover:text-white transition-colors">
         <i class="bi bi-arrow-left me-2"></i> EXIT LAB
     </a>
 </div>
@@ -84,7 +90,7 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
             
             <div class="mb-4">
                 <label class="text-gray-400 small fw-bold text-uppercase tracking-widest mb-2">Target Island Ecosystem</label>
-                <select id="simIsland" class="form-select bg-dark text-white border-secondary fw-bold">
+                <select id="simIsland" class="form-select bg-dark text-white border-secondary fw-bold shadow-inner">
                     <?php foreach($islands as $isl): ?>
                         <option value="<?= $isl['id'] ?>"><?= htmlspecialchars($isl['name']) ?> (Target: <?= $isl['rtp_rate'] ?>%)</option>
                     <?php endforeach; ?>
@@ -93,7 +99,7 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
             
             <div class="mb-4">
                 <label class="text-gray-400 small fw-bold text-uppercase tracking-widest mb-2">Spin Volume (Iterations)</label>
-                <select id="simSpins" class="form-select bg-dark text-white border-secondary font-mono">
+                <select id="simSpins" class="form-select bg-dark text-white border-secondary font-mono shadow-inner">
                     <option value="100000">100,000 Spins</option>
                     <option value="500000">500,000 Spins</option>
                     <option value="1000000" selected>1,000,000 Spins</option>
@@ -104,16 +110,16 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
 
             <div class="mb-4">
                 <label class="text-gray-400 small fw-bold text-uppercase tracking-widest mb-2">Bet Amount (MMK)</label>
-                <input type="number" id="simBet" class="form-control bg-dark text-warning border-secondary font-mono fw-bold" value="1000" step="100">
+                <input type="number" id="simBet" class="form-control bg-dark text-warning border-secondary font-mono fw-bold shadow-inner" value="1000" step="100">
             </div>
 
             <hr class="border-secondary opacity-50 my-4">
 
-            <button id="btnStartSim" class="btn btn-danger w-100 py-3 fw-black tracking-widest shadow-[0_0_20px_rgba(239,68,68,0.4)] hover:scale-105 transition-transform" onclick="startDeepSim()">
+            <button id="btnStartSim" class="btn btn-danger w-100 py-3 fw-black tracking-widest shadow-[0_0_20px_rgba(239,68,68,0.4)] hover:scale-105 active:scale-95 transition-transform" onclick="startDeepSim()">
                 <i class="bi bi-play-fill me-1"></i> INITIALIZE SEQUENCE
             </button>
             
-            <button id="btnStopSim" class="btn btn-outline-secondary w-100 py-3 fw-black tracking-widest mt-2 d-none" onclick="stopDeepSim()">
+            <button id="btnStopSim" class="btn btn-outline-secondary w-100 py-3 fw-black tracking-widest mt-2 d-none hover:bg-secondary hover:text-white transition-colors" onclick="stopDeepSim()">
                 <i class="bi bi-stop-fill me-1"></i> ABORT
             </button>
         </div>
@@ -124,7 +130,7 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
         <div class="glass-card p-0 border border-danger border-opacity-30 overflow-hidden h-100 d-flex flex-column shadow-2xl">
             
             <!-- Odometer HUD -->
-            <div class="bg-dark border-bottom border-danger border-opacity-30 p-4 d-flex flex-wrap gap-5 align-items-center justify-content-center shadow-inner relative z-10">
+            <div class="bg-dark border-bottom border-danger border-opacity-30 p-4 d-flex flex-wrap gap-4 gap-md-5 align-items-center justify-content-center shadow-inner relative z-10">
                 <div class="text-center">
                     <div class="text-gray-500 font-mono text-xs uppercase tracking-widest fw-bold mb-1">Spins Processed</div>
                     <div class="odometer-box text-white" id="deepOdometer">0</div>
@@ -149,35 +155,68 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
                     </div>
                 </div>
                 
-                <!-- Results Sidebar (Hidden until complete) -->
-                <div id="deepResultsContainer" class="bg-black border-start border-danger border-opacity-30" style="flex: 0 0 380px; overflow-y: auto;">
+                <!-- Expanded Results Sidebar (Hidden until complete) -->
+                <div id="deepResultsContainer" class="bg-black border-start border-danger border-opacity-30" style="flex: 0 0 550px; overflow-y: auto;">
                     <div id="deepResults" class="p-4 d-none h-100 d-flex flex-column">
                         <div class="text-center mb-4 border-bottom border-danger border-opacity-50 pb-3">
-                            <h4 class="text-danger font-mono fw-black mb-1"><i class="bi bi-file-earmark-check-fill"></i> AUDIT REPORT</h4>
+                            <h4 class="text-danger font-mono fw-black mb-1"><i class="bi bi-file-earmark-check-fill"></i> DETAILED AUDIT REPORT</h4>
                             <small class="text-muted font-mono" id="deepReportDate"></small>
                         </div>
                         
-                        <div class="d-grid gap-3 font-mono mb-4">
+                        <!-- Core Metrics -->
+                        <div class="d-grid gap-2 font-mono mb-4">
                             <div class="p-3 border border-secondary rounded bg-dark d-flex justify-content-between align-items-center">
                                 <span class="text-gray-400 text-xs">THEORY RTP</span>
                                 <span class="text-gray-200 fs-5 fw-bold" id="resDeepTheory">0%</span>
                             </div>
                             <div class="p-3 border border-danger rounded bg-danger bg-opacity-10 d-flex justify-content-between align-items-center shadow-[0_0_15px_rgba(239,68,68,0.3)]">
-                                <span class="text-danger text-xs fw-bold">ACTUAL RTP</span>
+                                <span class="text-danger text-xs fw-bold">ACTUAL CONVERGED RTP</span>
                                 <span class="text-danger fs-3 fw-black drop-shadow-md" id="resDeepActual">0%</span>
                             </div>
-                            <div class="p-3 border border-secondary rounded bg-dark d-flex justify-content-between align-items-center">
-                                <span class="text-gray-400 text-xs">HIT FREQUENCY</span>
-                                <span class="text-warning fs-5 fw-bold" id="resDeepHitFreq">0%</span>
+                            
+                            <!-- Win vs Loss Ratio Bar -->
+                            <div class="p-3 border border-secondary rounded bg-black d-flex flex-column justify-content-center">
+                                <div class="d-flex justify-content-between text-[10px] mb-1 uppercase tracking-widest fw-bold">
+                                    <span class="text-success" id="resDeepWinPctLabel">WIN: 0%</span>
+                                    <span class="text-secondary" id="resDeepLossPctLabel">LOSS: 0%</span>
+                                </div>
+                                <div class="progress bg-secondary rounded-pill overflow-hidden" style="height: 10px;">
+                                    <div id="resDeepWinBar" class="progress-bar bg-success shadow-[0_0_10px_lime]" style="width: 0%"></div>
+                                </div>
                             </div>
                         </div>
                         
-                        <h6 class="text-gray-500 font-mono text-[10px] uppercase tracking-widest mb-2 border-bottom border-secondary pb-1">Symbol Drop Matrix</h6>
-                        <div class="text-[10px] text-gray-300 font-mono flex-grow-1">
+                        <!-- PAYOUT CONTRIBUTION MATRIX -->
+                        <h6 class="text-gray-400 font-mono text-[10px] uppercase tracking-widest mb-2 border-bottom border-secondary pb-1 mt-2">
+                            <i class="bi bi-cash-stack text-success me-1"></i> Payout Contribution Matrix (Wins Only)
+                        </h6>
+                        <div class="table-responsive mb-4">
+                            <table class="table table-dark table-sm mb-0 font-mono text-[10px] matrix-table text-center align-middle">
+                                <thead>
+                                    <tr class="text-gray-500 uppercase">
+                                        <th class="text-start">Symbol</th>
+                                        <th>Mult</th>
+                                        <th>Hits</th>
+                                        <th>Win Share</th>
+                                        <th class="text-end">Total Payout</th>
+                                        <th class="text-end text-info">RTP Contrib</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="deepPayoutMatrix">
+                                    <!-- Injected by JS -->
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <!-- REEL SPAWN MATRIX -->
+                        <h6 class="text-gray-500 font-mono text-[10px] uppercase tracking-widest mb-2 border-bottom border-secondary pb-1">
+                            <i class="bi bi-grid-3x3 text-warning me-1"></i> Base Reel Spawn Matrix (All Spins)
+                        </h6>
+                        <div class="text-[10px] text-gray-300 font-mono flex-grow-1 bg-black bg-opacity-50 p-3 rounded border border-white border-opacity-5">
                             <div class="row text-center g-2" id="deepSymDistro"></div>
                         </div>
 
-                        <button type="button" class="btn btn-outline-danger w-100 py-3 mt-4 fw-black font-mono shadow-[0_0_15px_rgba(239,68,68,0.3)]" onclick="exportDeepPDF()">
+                        <button type="button" class="btn btn-outline-danger w-100 py-3 mt-4 fw-black font-mono shadow-[0_0_15px_rgba(239,68,68,0.3)] hover:scale-[1.02] transition-transform" onclick="exportDeepPDF()">
                             <i class="bi bi-download me-2"></i> EXPORT SECURE PDF
                         </button>
                     </div>
@@ -226,6 +265,8 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
         term.innerHTML = logBuffer.join('<br/>');
 
         const targetRtp = parseFloat(island.rtp_rate);
+        
+        // Deep Configs
         const multipliers = {
             1: parseFloat(pouts.sym_1_mult), 2: parseFloat(pouts.sym_2_mult), 3: parseFloat(pouts.sym_3_mult),
             4: parseFloat(pouts.sym_4_mult), 5: parseFloat(pouts.sym_5_mult), 6: parseFloat(pouts.sym_6_mult), 7: parseFloat(pouts.sym_7_mult)
@@ -256,14 +297,24 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
             return 7;
         };
 
+        // Telemetry Trackers
         let spins = 0;
-        const BATCH_SIZE = Math.min(25000, Math.ceil(maxSpins / 100)); // Dynamic batch size for smooth UI
+        const BATCH_SIZE = Math.min(25000, Math.ceil(maxSpins / 100)); 
         
         let totalIn = 0;
         let totalOut = 0;
         let totalWinningSpins = 0;
+        
+        // Base Matrix Trackers (All Spawns)
         let hits = {1:0, 2:0, 3:0, 4:0, 5:0, 6:0, 7:0}; 
+        
+        // Win Matrix Trackers (Winning Spins Only)
+        let winCounts = {1:0, 2:0, 3:0, 4:0, 5:0, 6:0, 7:0};
+        let winPayouts = {1:0, 2:0, 3:0, 4:0, 5:0, 6:0, 7:0};
+
         const symbolIcons = {1:'[7]', 2:'[CHR]', 3:'[BAR]', 4:'[BEL]', 5:'[MEL]', 6:'[CHE]', 7:'[REP]'};
+        const names = {1:'GJP/7', 2:'Char', 3:'BAR', 4:'Bell', 5:'Melon', 6:'Cherry', 7:'Replay'};
+        const colors = {1:'#ef4444', 2:'#a855f7', 3:'#f97316', 4:'#eab308', 5:'#22c55e', 6:'#ec4899', 7:'#06b6d4'};
 
         simInterval = setInterval(() => {
             let batchLogs = [];
@@ -284,9 +335,13 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
                     let winAmt = bet * multipliers[winSym];
                     totalOut += winAmt;
                     
-                    if (winAmt > 0) totalWinningSpins++;
+                    if (winAmt > 0) {
+                        totalWinningSpins++;
+                        winCounts[winSym]++;
+                        winPayouts[winSym] += winAmt;
+                    }
                     
-                    // Log mega hits
+                    // Log mega hits for terminal
                     if (multipliers[winSym] >= 15) {
                         batchLogs.push(`<div class="terminal-line"><span style="color:#0aa">[#${spins.toString().padStart(8,'0')}]</span> CRITICAL HIT! ${symbolIcons[winSym]}x3 -> <span style="color:#ff0">+${winAmt.toLocaleString()} MMK</span> (x${multipliers[winSym]})</div>`);
                     }
@@ -324,6 +379,7 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
                 term.innerHTML = logBuffer.join('');
                 term.scrollTop = term.scrollHeight;
                 
+                // 1. Core Metrics
                 let actualRtp = ((totalOut / totalIn) * 100).toFixed(2);
                 let hitFrequency = ((totalWinningSpins / maxSpins) * 100).toFixed(2);
                 
@@ -331,24 +387,50 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
                 document.getElementById('resDeepActual').innerText = `${actualRtp}%`;
                 document.getElementById('resDeepHitFreq').innerText = `${hitFrequency}%`;
                 
-                // Color Code
+                // Win/Loss Ratio
+                let lossCount = maxSpins - totalWinningSpins;
+                let winPct = ((totalWinningSpins / maxSpins) * 100).toFixed(2);
+                let lossPct = ((lossCount / maxSpins) * 100).toFixed(2);
+                document.getElementById('resDeepWinPctLabel').innerText = `WIN: ${winPct}%`;
+                document.getElementById('resDeepLossPctLabel').innerText = `LOSS: ${lossPct}%`;
+                document.getElementById('resDeepWinBar').style.width = `${winPct}%`;
+                
+                // Color Code RTP
                 const diff = actualRtp - targetRtp;
                 const actEl = document.getElementById('resDeepActual');
                 if (diff > 3) actEl.className = "text-danger fs-3 fw-black drop-shadow-[0_0_10px_red] animate-pulse";
                 else if (diff < -3) actEl.className = "text-warning fs-3 fw-black";
                 else actEl.className = "text-success fs-3 fw-black drop-shadow-[0_0_10px_lime]";
 
-                // Distribution Matrix
+                // 2. Build Payout Contribution Matrix (Wins Only)
+                let payoutHtml = '';
+                for(let i=1; i<=7; i++) {
+                    let sHits = winCounts[i];
+                    let sShare = totalWinningSpins > 0 ? ((sHits / totalWinningSpins) * 100).toFixed(2) : 0;
+                    let sPay = winPayouts[i];
+                    let sRtpCont = totalIn > 0 ? ((sPay / totalIn) * 100).toFixed(2) : 0;
+                    
+                    payoutHtml += `
+                        <tr class="border-b border-white border-opacity-5 hover:bg-white hover:bg-opacity-5 transition-colors">
+                            <td class="text-start fw-bold" style="color:${colors[i]}">${names[i]}</td>
+                            <td class="text-gray-400">x${multipliers[i]}</td>
+                            <td class="text-white">${sHits.toLocaleString()}</td>
+                            <td class="text-gray-300">${sShare}%</td>
+                            <td class="text-end text-success">${sPay.toLocaleString()}</td>
+                            <td class="text-end fw-black text-info">${sRtpCont}%</td>
+                        </tr>
+                    `;
+                }
+                document.getElementById('deepPayoutMatrix').innerHTML = payoutHtml;
+
+                // 3. Distribution Matrix (All Spawns)
                 const totalSyms = maxSpins * 3;
-                const names = {1:'GJP/7', 2:'Char', 3:'BAR', 4:'Bell', 5:'Melon', 6:'Cherry', 7:'Replay'};
-                const colors = {1:'#ef4444', 2:'#a855f7', 3:'#f97316', 4:'#eab308', 5:'#22c55e', 6:'#ec4899', 7:'#06b6d4'};
-                
                 let distHtml = '';
                 for(let i=1; i<=7; i++) {
                     let pct = ((hits[i] / totalSyms) * 100).toFixed(2);
                     distHtml += `
-                        <div class="col-12 mb-2">
-                            <div class="d-flex justify-content-between align-items-center border-bottom border-secondary pb-1">
+                        <div class="col-4 col-md-6 mb-2">
+                            <div class="d-flex justify-content-between align-items-center border-bottom border-secondary pb-1 px-1">
                                 <span style="color:${colors[i]}; font-weight:bold;">${names[i]}</span>
                                 <span class="text-white">${pct}%</span>
                             </div>
