@@ -5,7 +5,7 @@ if (!defined('ADMIN_BASE_PATH')) exit('Direct access denied');
 $pageTitle = "Reel Spawn Rates Control";
 requireRole(['GOD']);
 
-// Handle Saving New Weights
+// --- 1. HANDLE SAVING NEW WEIGHTS ---
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'save_rates') {
     $islandId = (int)$_POST['island_id'];
     $applyToAll = isset($_POST['apply_to_all']) ? true : false;
@@ -43,16 +43,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     }
 }
 
-// Fetch Selection
+// --- 2. FETCH SELECTION & DATA ---
 $currentIsland = isset($_GET['island']) ? (int)$_GET['island'] : 1;
-$islands = $pdo->query("SELECT id, name FROM islands ORDER BY id ASC")->fetchAll();
+$islands = $pdo->query("SELECT id, name, rtp_rate FROM islands ORDER BY id ASC")->fetchAll(PDO::FETCH_ASSOC);
 
 // Fetch Rates for selected Island
 $stmtRates = $pdo->prepare("SELECT * FROM reel_spawn_rates WHERE island_id = ? ORDER BY reel_index ASC");
 $stmtRates->execute([$currentIsland]);
 $rates = $stmtRates->fetchAll(PDO::FETCH_ASSOC);
 
-// Format into easily accessible array or fallback
 $formattedRates = [];
 foreach ($rates as $r) {
     $formattedRates[$r['reel_index']] = $r;
@@ -64,6 +63,22 @@ for ($i = 1; $i <= 3; $i++) {
         $formattedRates[$i] = ['sym_1'=>10, 'sym_2'=>40, 'sym_3'=>100, 'sym_4'=>200, 'sym_5'=>200, 'sym_6'=>250, 'sym_7'=>200];
     }
 }
+
+// Fetch V5.5 Core Logic for Simulation Environment (Win Rates & Payouts)
+$winRatesQuery = $pdo->query("SELECT * FROM island_win_rates");
+$allWinRates = $winRatesQuery->fetchAll(PDO::FETCH_ASSOC);
+$winRatesByIsland = [];
+
+$payoutsQuery = $pdo->query("SELECT * FROM island_symbol_payouts");
+$allPayouts = $payoutsQuery->fetchAll(PDO::FETCH_ASSOC);
+$payoutsByIsland = [];
+
+foreach($islands as $isl) {
+    $winRatesByIsland[$isl['id']] = ['base_hit_rate'=>22.00000000]; // Default fallback
+    $payoutsByIsland[$isl['id']] = ['sym_1_mult'=>100, 'sym_2_mult'=>20, 'sym_3_mult'=>10, 'sym_4_mult'=>10, 'sym_5_mult'=>15, 'sym_6_mult'=>2, 'sym_7_mult'=>0];
+}
+foreach ($allWinRates as $wr) { $winRatesByIsland[$wr['island_id']] = $wr; }
+foreach ($allPayouts as $p) { $payoutsByIsland[$p['island_id']] = $p; }
 
 require_once ADMIN_BASE_PATH . '/layout/main.php';
 ?>
@@ -77,9 +92,11 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
     }
     .weight-bar { transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1); }
     .locked-input { opacity: 0.7; pointer-events: none; filter: grayscale(50%); }
+    .terminal-container { background-color: rgba(0, 0, 0, 0.8); border: 1px solid rgba(0, 243, 255, 0.3); box-shadow: inset 0 0 30px rgba(0, 0, 0, 0.9); }
+    .terminal-line { margin: 0; padding: 0; line-height: 1.5; word-wrap: break-word; font-family: 'JetBrains Mono', monospace; font-size: 0.75rem; color: #00f3ff; }
 </style>
 
-<div class="d-flex justify-content-between align-items-end mb-4">
+<div class="d-flex justify-content-between align-items-end mb-4 relative z-10">
     <div>
         <h2 class="fw-black text-warning italic tracking-widest mb-0 drop-shadow-[0_0_10px_rgba(234,179,8,0.5)]">
             <i class="bi bi-cpu"></i> SPAWN MATRIX
@@ -90,9 +107,6 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
     <div class="d-flex gap-2">
         <button class="btn btn-outline-danger fw-bold px-3 rounded-pill shadow-sm" onclick="resetToOriginal()">
             <i class="bi bi-arrow-counterclockwise"></i> REVERT
-        </button>
-        <button class="btn btn-outline-success fw-bold px-3 rounded-pill shadow-sm" data-bs-toggle="modal" data-bs-target="#importModal">
-            <i class="bi bi-download"></i> IMPORT
         </button>
         <button class="btn btn-outline-info fw-bold px-3 rounded-pill shadow-sm" onclick="exportMatrix()">
             <i class="bi bi-clipboard-data"></i> EXPORT
@@ -133,13 +147,12 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
         
         <div class="row align-items-center position-relative z-10">
             <div class="col-md-4 border-end border-white border-opacity-10">
-                <h6 class="text-info fw-black tracking-widest uppercase mb-3"><i class="bi bi-calculator"></i> Live Telemetry</h6>
+                <h6 class="text-info fw-black tracking-widest uppercase mb-3"><i class="bi bi-calculator"></i> Matrix Analysis</h6>
                 <div class="d-flex justify-content-between align-items-end mb-2">
-                    <span class="text-gray-400 text-[10px] uppercase font-bold tracking-widest">Est. Hit Freq (5 Lines)</span>
-                    <span class="fs-3 fw-black font-mono text-white drop-shadow-[0_0_10px_cyan]" id="calcHitFreq">0.00%</span>
-                </div>
-                <div class="progress bg-dark border border-secondary rounded-pill" style="height: 6px;">
-                    <div id="barHitFreq" class="progress-bar bg-info shadow-[0_0_10px_cyan]" style="width: 0%"></div>
+                    <span class="text-gray-400 text-[10px] uppercase font-bold tracking-widest">Base Hit Rate Config</span>
+                    <span class="fs-4 fw-black font-mono text-cyan-300 drop-shadow-[0_0_10px_cyan]" id="displayBaseHitRate">
+                        <?= number_format($winRatesByIsland[$currentIsland]['base_hit_rate'], 8) ?>%
+                    </span>
                 </div>
             </div>
             
@@ -158,15 +171,13 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
             </div>
 
             <div class="col-md-4 ps-md-4">
-                <h6 class="text-gray-400 text-[10px] uppercase font-bold tracking-widest mb-2"><i class="bi bi-lightning-charge text-warning"></i> Quick Modifiers</h6>
                 <div class="d-grid gap-2">
-                    <div class="btn-group btn-group-sm w-100">
-                        <button type="button" class="btn btn-outline-danger fw-bold text-[10px]" onclick="adjustWeights('high', 1.1)">+10% HIGH YIELD</button>
-                        <button type="button" class="btn btn-outline-danger fw-bold text-[10px]" onclick="adjustWeights('high', 0.9)">-10% HIGH YIELD</button>
-                    </div>
-                    <div class="btn-group btn-group-sm w-100">
-                        <button type="button" class="btn btn-outline-success fw-bold text-[10px]" onclick="adjustWeights('low', 1.1)">+10% LOW YIELD</button>
-                        <button type="button" class="btn btn-outline-success fw-bold text-[10px]" onclick="adjustWeights('low', 0.9)">-10% LOW YIELD</button>
+                    <button type="button" class="btn btn-outline-info fw-black tracking-widest text-[11px] py-2 rounded-pill shadow-[0_0_15px_rgba(13,202,240,0.3)] hover:scale-105 active:scale-95 transition-transform" onclick="startMatrixSim()">
+                        <i class="bi bi-play-circle-fill me-1"></i> TEST MATRIX (10K SPINS)
+                    </button>
+                    <div class="btn-group btn-group-sm w-100 mt-2">
+                        <button type="button" class="btn btn-outline-danger fw-bold text-[9px]" onclick="adjustWeights('high', 1.1)">+10% HIGH</button>
+                        <button type="button" class="btn btn-outline-success fw-bold text-[9px]" onclick="adjustWeights('low', 1.1)">+10% LOW</button>
                     </div>
                 </div>
             </div>
@@ -229,7 +240,7 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
         <div class="text-muted small font-mono text-[10px] d-flex align-items-center gap-4">
             <div class="d-none d-md-block">
                 <i class="bi bi-shield-check text-success me-2"></i> 
-                Matrix computations run instantly on the client. Click deploy to sync weights to the game servers.
+                Simulation uses current inputs. Click deploy to sync these weights to the live database.
             </div>
             
             <div class="form-check form-switch bg-warning bg-opacity-10 border border-warning border-opacity-50 px-3 py-2 rounded-3 d-flex align-items-center gap-2">
@@ -239,23 +250,58 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
         </div>
 
         <button type="submit" id="deployBtn" class="btn btn-warning fw-black px-5 py-3 shadow-[0_0_20px_rgba(234,179,8,0.5)] text-dark hover:scale-105 active:scale-95 transition-transform tracking-widest disabled">
-            <i class="bi bi-cloud-arrow-up-fill me-2"></i> DEPLOY TO SERVERS
+            <i class="bi bi-cloud-arrow-up-fill me-2"></i> DEPLOY MATRIX TO SERVERS
         </button>
     </div>
 </form>
 
-<!-- IMPORT MODAL -->
-<div class="modal fade" id="importModal" tabindex="-1">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content glass-card bg-dark border-success">
-            <div class="modal-header border-secondary bg-black bg-opacity-50">
-                <h5 class="modal-title fw-black text-success italic tracking-widest"><i class="bi bi-file-code me-2"></i> IMPORT MATRIX JSON</h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+<!-- QUICK SIMULATION MODAL -->
+<div class="modal fade" id="simModal" tabindex="-1" data-bs-backdrop="static">
+    <div class="modal-dialog modal-xl modal-dialog-centered">
+        <div class="modal-content border-info" style="background-color: #050505; box-shadow: 0 0 50px rgba(0,243,255,0.3);">
+            <div class="modal-header border-info border-opacity-50 bg-info bg-opacity-10 py-3">
+                <h6 class="modal-title font-mono text-info fw-bold"><i class="bi bi-cpu me-2"></i> MATRIX SIMULATOR (V5.5 ENGINE)</h6>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" onclick="stopSimulation()"></button>
             </div>
-            <div class="modal-body p-4">
-                <p class="text-gray-400 small mb-3">Paste a previously copied JSON matrix array below to instantly populate the 21 reel variables.</p>
-                <textarea id="importJsonInput" class="form-control bg-black text-success font-mono border-secondary rounded-lg mb-3 shadow-inner" rows="6" placeholder='{"r1":[10,40,100,200,200,250,200], ...}'></textarea>
-                <button type="button" onclick="importMatrixJson()" class="btn btn-success w-100 fw-bold shadow-[0_0_15px_rgba(34,197,94,0.4)]">INJECT DATA</button>
+            
+            <div class="modal-body p-0 d-flex flex-column flex-lg-row">
+                <!-- Terminal Output -->
+                <div class="terminal-container p-4 flex-grow-1" style="height: 50vh; min-height: 400px; overflow-y: auto;">
+                    <div id="simTerminal"></div>
+                </div>
+                
+                <!-- Results Dashboard -->
+                <div id="simResultsContainer" class="bg-black border-start border-secondary" style="flex: 0 0 350px; overflow-y: auto;">
+                    <div id="simResults" class="p-4 d-none h-100 flex-column">
+                        <div class="text-center mb-3 border-bottom border-secondary pb-2">
+                            <h5 class="text-info font-mono fw-black mb-0">SANDBOX AUDIT</h5>
+                        </div>
+                        
+                        <div class="d-grid gap-2 font-mono mb-4">
+                            <div class="p-2 border border-secondary rounded bg-dark d-flex justify-content-between align-items-center">
+                                <span class="text-muted" style="font-size: 10px;">SPINS PROCESSED</span>
+                                <span class="text-white fs-5 fw-bold">10,000</span>
+                            </div>
+                            <div class="p-2 border border-info rounded bg-info bg-opacity-20 d-flex justify-content-between align-items-center shadow-[0_0_15px_rgba(0,243,255,0.3)]">
+                                <span class="text-info" style="font-size: 10px;">ACTUAL RTP YIELD</span>
+                                <span class="text-info fs-3 fw-black drop-shadow-md" id="resActualRtp">0%</span>
+                            </div>
+                            <div class="p-2 border border-secondary rounded bg-dark d-flex justify-content-between align-items-center">
+                                <span class="text-gray-400" style="font-size: 10px;">TOTAL WIN FREQUENCY</span>
+                                <span class="text-warning fs-5 fw-bold" id="resHitFreq">0%</span>
+                            </div>
+                        </div>
+                        
+                        <h6 class="text-gray-400 font-mono text-[10px] uppercase tracking-widest mb-2 border-bottom border-secondary pb-1">Spawn Drop Matrix (All Spins)</h6>
+                        <div class="text-[10px] text-gray-300 font-mono flex-grow-1 bg-black bg-opacity-50 p-2 rounded border border-white border-opacity-5">
+                            <div class="row text-center g-2" id="symDistro"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="modal-footer border-info border-opacity-30 bg-black">
+                <button type="button" class="btn btn-outline-secondary fw-bold font-mono" data-bs-dismiss="modal" onclick="stopSimulation()">CLOSE SANDBOX</button>
             </div>
         </div>
     </div>
@@ -264,6 +310,12 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
 <script>
 // Original Data for Revert Failsafe
 const ORIGINAL_RATES = <?= json_encode($formattedRates) ?>;
+
+// Embedded Constants for Simulation
+const ISL_ID = <?= $currentIsland ?>;
+const ISL_DATA = <?= json_encode($islands[array_search($currentIsland, array_column($islands, 'id'))] ?? $islands[0]) ?>;
+const WIN_RATES = <?= json_encode($winRatesByIsland[$currentIsland]) ?>;
+const PAYOUTS = <?= json_encode($payoutsByIsland[$currentIsland]) ?>;
 
 // --- MATRIX SAFETY LOCK ---
 function toggleMatrixLock() {
@@ -300,7 +352,6 @@ function adjustWeights(type, multiplier) {
 
     const highSymbols = [1, 2, 3]; // GJP, LOGO, 7
     const lowSymbols = [4, 5, 6, 7]; // Melon, Bell, Cherry, Replay
-
     const targetSymbols = type === 'high' ? highSymbols : lowSymbols;
 
     for (let r = 1; r <= 3; r++) {
@@ -333,12 +384,11 @@ function resetToOriginal() {
     triggerRecalc();
 }
 
-// --- LIVE MATHEMATICS ENGINE (Client-Side Simulation) ---
+// --- LIVE DOM MATHEMATICS ENGINE ---
 function triggerRecalc() {
     let rTotals = {1:0, 2:0, 3:0};
     let weights = {1:{}, 2:{}, 3:{}};
 
-    // 1. Gather all weights and calc totals
     for (let r = 1; r <= 3; r++) {
         for (let s = 1; s <= 7; s++) {
             let val = parseInt(document.getElementById(`input_r${r}_s${s}`).value) || 0;
@@ -346,17 +396,15 @@ function triggerRecalc() {
             rTotals[r] += val;
         }
         
-        // Safety Warning
         const totalEl = document.getElementById(`total_weight_${r}`);
         totalEl.innerText = rTotals[r];
         if (rTotals[r] === 0) {
             totalEl.className = "text-danger fw-black animate-pulse";
-            totalEl.innerText = "0 (FATAL ERROR)";
+            totalEl.innerText = "0 (FATAL)";
         } else {
             totalEl.className = "text-info fw-bold";
         }
         
-        // Update individual percentages & visual bars
         for (let s = 1; s <= 7; s++) {
             let pct = rTotals[r] > 0 ? ((weights[r][s] / rTotals[r]) * 100).toFixed(1) : 0;
             document.getElementById(`pct_r${r}_s${s}`).innerText = pct + '%';
@@ -364,28 +412,12 @@ function triggerRecalc() {
         }
     }
 
-    // 2. Calculate Theoretical Hit Frequency (P(Win) across 5 lines)
-    let totalHitProbLine = 0;
-    if (rTotals[1] > 0 && rTotals[2] > 0 && rTotals[3] > 0) {
-        for (let s = 1; s <= 7; s++) {
-            let p1 = weights[1][s] / rTotals[1];
-            let p2 = weights[2][s] / rTotals[2];
-            let p3 = weights[3][s] / rTotals[3];
-            totalHitProbLine += (p1 * p2 * p3);
-        }
-    }
-    
-    // Approx across 5 paylines
-    let estHitFreq = Math.min(100, (totalHitProbLine * 5) * 100);
-    document.getElementById('calcHitFreq').innerText = estHitFreq.toFixed(2) + '%';
-    document.getElementById('barHitFreq').style.width = estHitFreq + '%';
-
-    // 3. Volatility DNA Calculation
+    // Volatility DNA Calculation
     let highYieldWeights = 0;
     let lowYieldWeights = 0;
     
     for (let r = 1; r <= 3; r++) {
-        highYieldWeights += weights[r][1] + weights[r][2] + weights[r][3]; // GJP, LOGO, 7
+        highYieldWeights += weights[r][1] + weights[r][2] + weights[r][3]; 
         lowYieldWeights += weights[r][4] + weights[r][5] + weights[r][6] + weights[r][7];
     }
     
@@ -397,100 +429,153 @@ function triggerRecalc() {
     document.getElementById('barDnaHigh').style.width = highPct + '%';
     document.getElementById('barDnaLow').style.width = lowPct + '%';
 
-    // 4. AI Insight Generator
     let insight = "";
     if (highPct >= 20) insight = "<span class='text-danger'>High variance detected. Expect rare, but massive payouts.</span>";
-    else if (highPct <= 10) insight = "<span class='text-success'>Low variance drip-feed. Constant small wins to increase retention.</span>";
-    else insight = "<span class='text-info'>Balanced mathematical ecosystem. Steady progression.</span>";
+    else if (highPct <= 10) insight = "<span class='text-success'>Low variance drip-feed. Constant small wins.</span>";
+    else insight = "<span class='text-info'>Balanced ecosystem. Steady progression.</span>";
     document.getElementById('calcInsight').innerHTML = insight;
 }
 
-// Intelligent Presets Engine
-function applyPreset(type) {
-    if (document.getElementById('matrixLockToggle').checked) {
-        alert("Unlock Safe Mode first to apply presets.");
-        return;
-    }
+// --- SANDBOX SIMULATION (Mirrors V5.5 Engine Logic) ---
+let simInterval = null;
 
-    const presets = {
-        balanced: { r1: [10, 40, 100, 200, 200, 250, 200], r2: [5, 30, 80, 220, 220, 245, 200], r3: [2, 20, 60, 250, 250, 218, 200] },
-        high_vol: { r1: [25, 60, 150, 100, 100, 50, 50], r2: [10, 40, 100, 150, 150, 80, 80], r3: [1, 10, 30, 300, 300, 100, 100] },
-        low_vol:  { r1: [1, 10, 30, 300, 300, 500, 400], r2: [1, 10, 30, 300, 300, 500, 400], r3: [1, 10, 30, 300, 300, 500, 400] },
-        teaser:   { r1: [100, 100, 100, 150, 150, 200, 200], r2: [100, 100, 100, 150, 150, 200, 200], r3: [1, 5, 10, 300, 300, 200, 200] }
+function startMatrixSim() {
+    const term = document.getElementById('simTerminal');
+    document.getElementById('simResults').classList.add('d-none');
+    document.getElementById('simResults').classList.remove('d-flex');
+    
+    // Read Current Input Weights directly from the DOM
+    const currentWeights = {
+        1: { 1:parseInt(document.getElementById('input_r1_s1').value)||0, 2:parseInt(document.getElementById('input_r1_s2').value)||0, 3:parseInt(document.getElementById('input_r1_s3').value)||0, 4:parseInt(document.getElementById('input_r1_s4').value)||0, 5:parseInt(document.getElementById('input_r1_s5').value)||0, 6:parseInt(document.getElementById('input_r1_s6').value)||0, 7:parseInt(document.getElementById('input_r1_s7').value)||0 },
+        2: { 1:parseInt(document.getElementById('input_r2_s1').value)||0, 2:parseInt(document.getElementById('input_r2_s2').value)||0, 3:parseInt(document.getElementById('input_r2_s3').value)||0, 4:parseInt(document.getElementById('input_r2_s4').value)||0, 5:parseInt(document.getElementById('input_r2_s5').value)||0, 6:parseInt(document.getElementById('input_r2_s6').value)||0, 7:parseInt(document.getElementById('input_r2_s7').value)||0 },
+        3: { 1:parseInt(document.getElementById('input_r3_s1').value)||0, 2:parseInt(document.getElementById('input_r3_s2').value)||0, 3:parseInt(document.getElementById('input_r3_s3').value)||0, 4:parseInt(document.getElementById('input_r3_s4').value)||0, 5:parseInt(document.getElementById('input_r3_s5').value)||0, 6:parseInt(document.getElementById('input_r3_s6').value)||0, 7:parseInt(document.getElementById('input_r3_s7').value)||0 }
     };
 
-    const target = presets[type];
-    if (!target) return;
-
-    for (let r = 1; r <= 3; r++) {
-        for (let s = 1; s <= 7; s++) {
-            document.getElementById(`input_r${r}_s${s}`).value = target[`r${r}`][s-1];
-        }
-    }
+    const targetRtp = parseFloat(ISL_DATA.rtp_rate || 70.0);
+    const baseHitRate = parseFloat(WIN_RATES.base_hit_rate || 22.0);
     
-    document.querySelectorAll('.weight-input').forEach(el => {
-        el.classList.add('border-info', 'shadow-[0_0_10px_cyan]');
-        setTimeout(() => el.classList.remove('border-info', 'shadow-[0_0_10px_cyan]'), 500);
-    });
+    const multipliers = {
+        1: parseFloat(PAYOUTS.sym_1_mult||100), 2: parseFloat(PAYOUTS.sym_2_mult||20), 3: parseFloat(PAYOUTS.sym_3_mult||10),
+        4: parseFloat(PAYOUTS.sym_4_mult||10), 5: parseFloat(PAYOUTS.sym_5_mult||15), 6: parseFloat(PAYOUTS.sym_6_mult||2), 7: parseFloat(PAYOUTS.sym_7_mult||0)
+    };
+    const winSymWeights = {2: 5, 3: 10, 4: 25, 5: 20, 6: 25, 7: 15};
+    
+    let logBuffer = [
+        `> Initializing Matrix Sandbox...`,
+        `> Reading Active DOM Weights for Reel Generation...`,
+        `> V5.5 AI Constraint: <span style="color:#0ff">Base Hit Rate ${baseHitRate}%</span>`,
+        `> Executing 10,000 spins at 1,000 MMK bet...`,
+        `--------------------------------------------------`
+    ];
+    term.innerHTML = logBuffer.join('<br/>');
+    
+    new bootstrap.Modal(document.getElementById('simModal')).show();
 
-    triggerRecalc();
-}
-
-// JSON Matrix Export
-function exportMatrix() {
-    let matrix = { r1: [], r2: [], r3: [] };
-    for(let r=1; r<=3; r++) {
-        for(let s=1; s<=7; s++) {
-            matrix[`r${r}`].push(parseInt(document.getElementById(`input_r${r}_s${s}`).value) || 0);
+    const pickSymbol = (weightsObj) => {
+        const arr = Object.values(weightsObj);
+        const total = arr.reduce((a,b)=>a+parseInt(b), 0);
+        let rand = Math.floor(Math.random() * total) + 1;
+        let sum = 0;
+        for(let i=1; i<=7; i++) {
+            sum += parseInt(weightsObj[i]);
+            if (rand <= sum) return i;
         }
-    }
-    navigator.clipboard.writeText(JSON.stringify(matrix));
-    alert("Matrix JSON copied to clipboard!");
-}
+        return 7;
+    };
 
-// JSON Matrix Import
-function importMatrixJson() {
-    if (document.getElementById('matrixLockToggle').checked) {
-        alert("Unlock Safe Mode first to import data.");
-        return;
-    }
+    const pickWinSymbol = () => {
+        const arr = Object.values(winSymWeights);
+        const total = arr.reduce((a,b)=>a+b, 0);
+        let rand = Math.floor(Math.random() * total) + 1;
+        let sum = 0;
+        for (let [sym, w] of Object.entries(winSymWeights)) {
+            sum += w;
+            if (rand <= sum) return parseInt(sym);
+        }
+        return 7;
+    };
 
-    try {
-        const jsonStr = document.getElementById('importJsonInput').value;
-        const matrix = JSON.parse(jsonStr);
-        
-        if (matrix.r1 && matrix.r2 && matrix.r3) {
-            for(let r=1; r<=3; r++) {
-                for(let s=1; s<=7; s++) {
-                    if(matrix[`r${r}`][s-1] !== undefined) {
-                        document.getElementById(`input_r${r}_s${s}`).value = matrix[`r${r}`][s-1];
-                    }
+    let spins = 0;
+    const MAX_SPINS = 10000;
+    const BATCH_SIZE = 1000; 
+    const bet = 1000;
+    
+    let totalIn = 0, totalOut = 0, totalWinningSpins = 0;
+    let hits = {1:0, 2:0, 3:0, 4:0, 5:0, 6:0, 7:0}; 
+    const names = {1:'GJP', 2:'CHR', 3:'BAR', 4:'BEL', 5:'MEL', 6:'CHE', 7:'REP'};
+    const colors = {1:'#ef4444', 2:'#a855f7', 3:'#f97316', 4:'#eab308', 5:'#22c55e', 6:'#ec4899', 7:'#06b6d4'};
+
+    simInterval = setInterval(() => {
+        let batchLogs = [];
+        for(let b=0; b<BATCH_SIZE && spins < MAX_SPINS; b++) {
+            spins++;
+            totalIn += bet;
+
+            // Generate physical board drops from the DOM inputs
+            let r1 = pickSymbol(currentWeights[1]); let r2 = pickSymbol(currentWeights[2]); let r3 = pickSymbol(currentWeights[3]);
+            hits[r1]++; hits[r2]++; hits[r3]++;
+
+            // V5.5 10-Billion Scale RNG Engine
+            let isHit = (Math.random() * 10000000000) <= (baseHitRate * 100000000);
+            
+            if (isHit) {
+                let winSym = pickWinSymbol();
+                let winAmt = bet * multipliers[winSym];
+                totalOut += winAmt;
+                if (winAmt > 0) totalWinningSpins++;
+                
+                if (multipliers[winSym] >= 10) {
+                    batchLogs.push(`<div class="terminal-line"><span style="color:#0aa">[#${spins.toString().padStart(5,'0')}]</span> HIT! [${names[winSym]}]x3 -> <span style="color:#ff0">+${winAmt.toLocaleString()} MMK</span></div>`);
                 }
             }
-            triggerRecalc();
-            
-            document.querySelectorAll('.weight-input').forEach(el => {
-                el.classList.add('border-success', 'shadow-[0_0_10px_lime]');
-                setTimeout(() => el.classList.remove('border-success', 'shadow-[0_0_10px_lime]'), 500);
-            });
-            
-            const modalEl = document.getElementById('importModal');
-            const modal = bootstrap.Modal.getInstance(modalEl);
-            if (modal) modal.hide();
-            
-            document.getElementById('importJsonInput').value = '';
-        } else {
-            alert("Invalid Matrix Format. Expected {r1:[], r2:[], r3:[]}");
         }
-    } catch(e) {
-        alert("Invalid JSON data. Please check syntax.");
-    }
+
+        if (batchLogs.length > 0) {
+            logBuffer = logBuffer.concat(batchLogs);
+            if (logBuffer.length > 100) logBuffer = logBuffer.slice(logBuffer.length - 100);
+            term.innerHTML = logBuffer.join('');
+            term.scrollTop = term.scrollHeight;
+        }
+
+        if (spins >= MAX_SPINS) {
+            clearInterval(simInterval);
+            logBuffer.push(`<div class="terminal-line mt-3" style="color:#0f0; font-weight:900;">> SANDBOX SIMULATION COMPLETE.</div>`);
+            term.innerHTML = logBuffer.join('');
+            term.scrollTop = term.scrollHeight;
+            
+            let actualRtp = ((totalOut / totalIn) * 100).toFixed(2);
+            let hitFreq = ((totalWinningSpins / MAX_SPINS) * 100).toFixed(2);
+            document.getElementById('resActualRtp').innerText = `${actualRtp}%`;
+            document.getElementById('resHitFreq').innerText = `${hitFreq}%`;
+            
+            const diff = actualRtp - targetRtp;
+            const actEl = document.getElementById('resActualRtp');
+            if (diff > 3) actEl.className = "text-danger fs-3 fw-black drop-shadow-[0_0_10px_red] animate-pulse";
+            else if (diff < -3) actEl.className = "text-warning fs-3 fw-black";
+            else actEl.className = "text-info fs-3 fw-black drop-shadow-[0_0_10px_cyan]";
+
+            const totalSyms = MAX_SPINS * 3;
+            let distHtml = '';
+            for(let i=1; i<=7; i++) {
+                let pct = ((hits[i] / totalSyms) * 100).toFixed(2);
+                distHtml += `<div class="col-6 mb-2"><div class="d-flex justify-content-between border-bottom border-secondary pb-1 px-2"><span style="color:${colors[i]}; font-weight:bold;">${names[i]}</span><span class="text-white">${pct}%</span></div></div>`;
+            }
+            document.getElementById('symDistro').innerHTML = distHtml;
+            
+            document.getElementById('simResults').classList.remove('d-none');
+            document.getElementById('simResults').classList.add('d-flex');
+        }
+    }, 40); 
+}
+
+function stopSimulation() {
+    if (simInterval) clearInterval(simInterval);
 }
 
 // Init calculation & lock state on load
 document.addEventListener("DOMContentLoaded", () => {
     triggerRecalc();
-    toggleMatrixLock(); // Initialize safe mode on load
+    toggleMatrixLock(); 
 });
 </script>
 
