@@ -134,7 +134,35 @@ foreach ($allRates as $r) { $spawnRatesByIsland[$r['island_id']][$r['reel_index'
 foreach ($allPayouts as $p) { $payoutsByIsland[$p['island_id']] = $p; }
 foreach ($allWinRates as $wr) { $winRatesByIsland[$wr['island_id']] = $wr; }
 
-// --- 3. FETCH CONFIGURATION AUDIT LOGS ---
+// --- 3. VOLATILITY DNA & AI INSIGHTS ---
+$islandInsights = [];
+foreach($islands as $isl) {
+    $rates = $spawnRatesByIsland[$isl['id']];
+    $totalHigh = 0; $totalLow = 0;
+    
+    for ($reel = 1; $reel <= 3; $reel++) {
+        if (isset($rates[$reel])) {
+            $totalHigh += $rates[$reel]['sym_1'] + $rates[$reel]['sym_2'] + $rates[$reel]['sym_3'];
+            $totalLow += $rates[$reel]['sym_4'] + $rates[$reel]['sym_5'] + $rates[$reel]['sym_6'] + $rates[$reel]['sym_7'];
+        }
+    }
+    
+    $total = $totalHigh + $totalLow;
+    $highPct = $total > 0 ? round(($totalHigh / $total) * 100) : 0;
+    $lowPct = 100 - $highPct;
+    
+    if ($highPct >= 20) {
+        $insight = "High variance detected. Expect rare, but massive payouts."; $color = "danger";
+    } elseif ($highPct <= 10) {
+        $insight = "Low variance drip-feed. Constant small wins for high retention."; $color = "success";
+    } else {
+        $insight = "Balanced mathematical ecosystem. Steady progression."; $color = "info";
+    }
+    
+    $islandInsights[$isl['id']] = ['high_pct' => $highPct, 'low_pct' => $lowPct, 'text' => $insight, 'color' => $color];
+}
+
+// --- 4. FETCH CONFIGURATION AUDIT LOGS ---
 $auditLogs = $pdo->query("
     SELECT al.action, al.created_at, au.username 
     FROM audit_logs al 
@@ -181,7 +209,7 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
         border: 1px solid rgba(0, 243, 255, 0.2);
         box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.8);
     }
-    .terminal-line { margin: 0; padding: 0; line-height: 1.4; word-wrap: break-word; }
+    .terminal-line { margin: 0; padding: 0; line-height: 1.4; word-wrap: break-word; font-family: 'JetBrains Mono', monospace; font-size: 0.75rem; color: #00f3ff; }
     .odometer-box {
         background: #000; border: 2px solid #333; padding: 5px 10px; border-radius: 8px;
         font-family: 'JetBrains Mono', monospace; font-size: 1.5rem; font-weight: 900; letter-spacing: 2px;
@@ -282,6 +310,17 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
                     </div>
                 </div>
 
+                <div class="mb-4">
+                    <div class="d-flex justify-content-between text-[9px] text-gray-400 fw-bold uppercase tracking-widest mb-1">
+                        <span>Volatility DNA</span>
+                        <span class="text-<?= $insightData['color'] ?> font-mono"><?= $insightData['high_pct'] ?>% HIGH YIELD</span>
+                    </div>
+                    <div class="progress rounded-pill bg-dark border border-secondary" style="height: 6px;">
+                        <div class="progress-bar bg-danger" style="width: <?= $insightData['high_pct'] ?>%"></div>
+                        <div class="progress-bar bg-success opacity-75" style="width: <?= $insightData['low_pct'] ?>%"></div>
+                    </div>
+                </div>
+
                 <div class="d-grid gap-2 mt-auto">
                     <!-- TWEAK CONFIG (GOD ONLY) -->
                     <?php if($_SESSION['admin_role'] === 'GOD'): ?>
@@ -363,7 +402,7 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
 <!-- QUICK 10K SPIN SIMULATION MODAL -->
 <div class="modal fade" id="simModal" tabindex="-1" data-bs-backdrop="static">
     <div class="modal-dialog modal-fullscreen-lg-down modal-xl modal-dialog-centered">
-        <div class="modal-content border-info" style="background-color: #050505; box-shadow: 0 0 50px rgba(0,243,255,0.2);">
+        <div class="modal-content border-info" style="background-color: #050505; box-shadow: 0 0 50px rgba(0,243,255,0.3);">
             <div class="modal-header border-info border-opacity-50 bg-info bg-opacity-10 py-3">
                 <h6 class="modal-title font-mono text-info fw-bold"><i class="bi bi-lightning-charge me-2"></i> QUICK SIM (10K) - <span id="simTitle"></span></h6>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" onclick="stopSimulation()"></button>
@@ -388,7 +427,7 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
                 
                 <!-- Results Dashboard -->
                 <div id="simResultsContainer" class="bg-dark border-start border-secondary" style="flex: 0 0 350px; overflow-y: auto;">
-                    <div id="simResults" class="p-4 d-none bg-dark h-100">
+                    <div id="simResults" class="p-4 d-none bg-dark h-100 flex-column">
                         <div class="text-center mb-3 border-bottom border-secondary pb-2">
                             <h5 class="text-info font-mono fw-black mb-0">QUICK AUDIT</h5>
                         </div>
