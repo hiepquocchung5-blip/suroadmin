@@ -16,6 +16,10 @@ $payoutsQuery = $pdo->query("SELECT * FROM island_symbol_payouts");
 $allPayouts = $payoutsQuery->fetchAll(PDO::FETCH_ASSOC);
 $payoutsByIsland = [];
 
+$winRatesQuery = $pdo->query("SELECT * FROM island_win_rates");
+$allWinRates = $winRatesQuery->fetchAll(PDO::FETCH_ASSOC);
+$winRatesByIsland = [];
+
 foreach($islands as $isl) {
     $spawnRatesByIsland[$isl['id']] = [
         1 => ['sym_1'=>10, 'sym_2'=>40, 'sym_3'=>100, 'sym_4'=>200, 'sym_5'=>200, 'sym_6'=>250, 'sym_7'=>200],
@@ -25,10 +29,14 @@ foreach($islands as $isl) {
     $payoutsByIsland[$isl['id']] = [
         'sym_1_mult'=>100, 'sym_2_mult'=>20, 'sym_3_mult'=>10, 'sym_4_mult'=>10, 'sym_5_mult'=>15, 'sym_6_mult'=>2, 'sym_7_mult'=>0
     ];
+    $winRatesByIsland[$isl['id']] = [
+        'base_hit_rate'=>22.00000000, 'max_rtp_cap'=>95.00000000, 'burst_volatility'=>1.50000000
+    ];
 }
 
 foreach ($allRates as $r) { $spawnRatesByIsland[$r['island_id']][$r['reel_index']] = $r; }
 foreach ($allPayouts as $p) { $payoutsByIsland[$p['island_id']] = $p; }
+foreach ($allWinRates as $wr) { $winRatesByIsland[$wr['island_id']] = $wr; }
 
 require_once ADMIN_BASE_PATH . '/layout/main.php';
 ?>
@@ -236,6 +244,7 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
     const DB_ISLANDS = <?= json_encode($islands) ?>;
     const DB_SPAWN_RATES = <?= json_encode($spawnRatesByIsland) ?>;
     const DB_PAYOUTS = <?= json_encode($payoutsByIsland) ?>;
+    const DB_WIN_RATES = <?= json_encode($winRatesByIsland) ?>;
     
     let simInterval = null;
 
@@ -253,6 +262,7 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
         const island = DB_ISLANDS.find(i => parseInt(i.id) === islandId);
         const rates = DB_SPAWN_RATES[islandId];
         const pouts = DB_PAYOUTS[islandId];
+        const wRates = DB_WIN_RATES[islandId];
         
         document.getElementById('btnStartSim').classList.add('d-none');
         document.getElementById('btnStopSim').classList.remove('d-none');
@@ -280,6 +290,7 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
         term.innerHTML = logBuffer.join('<br/>');
 
         const targetRtp = parseFloat(island.rtp_rate);
+        const baseHitRate = parseFloat(wRates.base_hit_rate);
         
         // Deep Configs
         const multipliers = {
@@ -342,8 +353,8 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
                 let r1 = pickSymbol(rates[1]); let r2 = pickSymbol(rates[2]); let r3 = pickSymbol(rates[3]);
                 hits[r1]++; hits[r2]++; hits[r3]++;
 
-                // Hit Engine
-                let isHit = (Math.random() * 10000) <= (targetRtp * 100);
+                // Ultra High Precision Hit Engine (10-Billion Scale)
+                let isHit = (Math.random() * 10000000000) <= (baseHitRate * 100000000);
                 
                 if (isHit) {
                     let winSym = pickWinSymbol();
