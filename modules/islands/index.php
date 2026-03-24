@@ -565,23 +565,23 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
                         </div>
                         <div class="row g-3 font-mono">
                             <div class="col-sm-6 col-md-4">
-                                <label class="small text-danger fw-bold text-[10px] tracking-widest">SYM 1 (7 / GJP)</label>
+                                <label class="small text-danger fw-bold text-[10px] tracking-widest">SYM 1 (Grand Jackpot)</label>
                                 <input type="number" step="0.00000001" name="sym_1_mult" id="editMult1" class="form-control bg-black text-white border-secondary shadow-inner" required>
                             </div>
                             <div class="col-sm-6 col-md-4">
-                                <label class="small text-purple-400 fw-bold text-[10px] tracking-widest">SYM 2 (Character)</label>
+                                <label class="small text-purple-400 fw-bold text-[10px] tracking-widest">SYM 2 (LOGO)</label>
                                 <input type="number" step="0.00000001" name="sym_2_mult" id="editMult2" class="form-control bg-black text-white border-secondary shadow-inner" required>
                             </div>
                             <div class="col-sm-6 col-md-4">
-                                <label class="small text-orange-400 fw-bold text-[10px] tracking-widest">SYM 3 (BAR)</label>
+                                <label class="small text-orange-400 fw-bold text-[10px] tracking-widest">SYM 3 (7 Seven)</label>
                                 <input type="number" step="0.00000001" name="sym_3_mult" id="editMult3" class="form-control bg-black text-white border-secondary shadow-inner" required>
                             </div>
                             <div class="col-sm-6 col-md-4">
-                                <label class="small text-yellow-400 fw-bold text-[10px] tracking-widest">SYM 4 (Bell)</label>
+                                <label class="small text-green-400 fw-bold text-[10px] tracking-widest">SYM 4 (Melon)</label>
                                 <input type="number" step="0.00000001" name="sym_4_mult" id="editMult4" class="form-control bg-black text-white border-secondary shadow-inner" required>
                             </div>
                             <div class="col-sm-6 col-md-4">
-                                <label class="small text-green-400 fw-bold text-[10px] tracking-widest">SYM 5 (Melon)</label>
+                                <label class="small text-yellow-400 fw-bold text-[10px] tracking-widest">SYM 5 (Bell)</label>
                                 <input type="number" step="0.00000001" name="sym_5_mult" id="editMult5" class="form-control bg-black text-white border-secondary shadow-inner" required>
                             </div>
                             <div class="col-sm-6 col-md-4">
@@ -589,7 +589,7 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
                                 <input type="number" step="0.00000001" name="sym_6_mult" id="editMult6" class="form-control bg-black text-white border-secondary shadow-inner" required>
                             </div>
                             <div class="col-12">
-                                <label class="small text-cyan-400 fw-bold text-[10px] tracking-widest">SYM 7 (Replay / Free Spin)</label>
+                                <label class="small text-cyan-400 fw-bold text-[10px] tracking-widest">SYM 7 (Replay)</label>
                                 <input type="number" step="0.00000001" name="sym_7_mult" id="editMult7" class="form-control bg-black text-white border-secondary shadow-inner" required>
                                 <div class="form-text text-muted text-[10px]">Replay typically pays 0x but triggers a free spin logic in engine.</div>
                             </div>
@@ -765,8 +765,8 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
                 else actEl.className = "text-info fs-3 fw-black drop-shadow-[0_0_10px_cyan]";
 
                 const totalSyms = MAX_SPINS * 3;
-                const names = {1:'GJP/7', 2:'Char', 3:'BAR', 4:'Bell', 5:'Melon', 6:'Cherry', 7:'Replay'};
-                const colors = {1:'#ef4444', 2:'#a855f7', 3:'#f97316', 4:'#eab308', 5:'#22c55e', 6:'#ec4899', 7:'#06b6d4'};
+                const names = {1:'GJP', 2:'LOGO', 3:'7', 4:'Melon', 5:'Bell', 6:'Cherry', 7:'Replay'};
+                const colors = {1:'#ef4444', 2:'#a855f7', 3:'#f97316', 4:'#22c55e', 5:'#eab308', 6:'#ec4899', 7:'#06b6d4'};
                 let distHtml = '';
                 for(let i=1; i<=7; i++) {
                     let pct = ((hits[i] / totalSyms) * 100).toFixed(2);
