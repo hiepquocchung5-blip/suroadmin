@@ -174,6 +174,12 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
                                 <span class="text-danger fs-3 fw-black drop-shadow-md" id="resDeepActual">0%</span>
                             </div>
                             
+                            <!-- RESTORED: HIT FREQUENCY METRIC -->
+                            <div class="p-3 border border-secondary rounded bg-dark d-flex justify-content-between align-items-center">
+                                <span class="text-gray-400 text-xs">HIT FREQUENCY</span>
+                                <span class="text-warning fs-5 fw-bold" id="resDeepHitFreq">0%</span>
+                            </div>
+                            
                             <!-- Win vs Loss Ratio Bar -->
                             <div class="p-3 border border-secondary rounded bg-black d-flex flex-column justify-content-center">
                                 <div class="d-flex justify-content-between text-[10px] mb-1 uppercase tracking-widest fw-bold">
@@ -233,6 +239,12 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
     
     let simInterval = null;
 
+    // --- Safety Wrapper to prevent null reference errors ---
+    const safeSetText = (id, text) => {
+        const el = document.getElementById(id);
+        if (el) el.innerText = text;
+    };
+
     function startDeepSim() {
         const islandId = parseInt(document.getElementById('simIsland').value);
         const maxSpins = parseInt(document.getElementById('simSpins').value);
@@ -245,15 +257,18 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
         document.getElementById('btnStartSim').classList.add('d-none');
         document.getElementById('btnStopSim').classList.remove('d-none');
         document.getElementById('deepResults').classList.add('d-none');
-        document.getElementById('deepReportDate').innerText = new Date().toLocaleString();
+        
+        safeSetText('deepReportDate', new Date().toLocaleString());
         
         const term = document.getElementById('deepTerminal');
         
-        // Reset Odometers
-        document.getElementById('deepOdometer').innerText = '0';
-        document.getElementById('deepRtp').innerText = '0.00%';
-        document.getElementById('deepPnl').innerText = '0';
-        document.getElementById('deepPnl').className = 'odometer-box text-muted';
+        // Reset Odometers Safely
+        safeSetText('deepOdometer', '0');
+        safeSetText('deepRtp', '0.00%');
+        safeSetText('deepPnl', '0');
+        
+        const pnlEl = document.getElementById('deepPnl');
+        if (pnlEl) pnlEl.className = 'odometer-box text-muted';
         
         let logBuffer = [
             `> <span style="color:#fff;">[SYSTEM]</span> INITIATING DEEP AUDIT PROTOCOL...`,
@@ -362,14 +377,17 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
                 term.scrollTop = term.scrollHeight;
             }
 
-            // Update Live Odometers
+            // Update Live Odometers Safely
             let currentRtp = ((totalOut / totalIn) * 100).toFixed(2);
             let currentPnl = totalIn - totalOut;
             
-            document.getElementById('deepOdometer').innerText = spins.toLocaleString();
-            document.getElementById('deepRtp').innerText = currentRtp + '%';
-            document.getElementById('deepPnl').innerText = currentPnl > 0 ? '+' + currentPnl.toLocaleString() : currentPnl.toLocaleString();
-            document.getElementById('deepPnl').className = `odometer-box ${currentPnl >= 0 ? 'text-success' : 'text-danger'}`;
+            safeSetText('deepOdometer', spins.toLocaleString());
+            safeSetText('deepRtp', currentRtp + '%');
+            safeSetText('deepPnl', currentPnl > 0 ? '+' + currentPnl.toLocaleString() : currentPnl.toLocaleString());
+            
+            if (pnlEl) {
+                pnlEl.className = `odometer-box ${currentPnl >= 0 ? 'text-success' : 'text-danger'}`;
+            }
 
             // END OF SIMULATION
             if (spins >= maxSpins) {
@@ -383,24 +401,29 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
                 let actualRtp = ((totalOut / totalIn) * 100).toFixed(2);
                 let hitFrequency = ((totalWinningSpins / maxSpins) * 100).toFixed(2);
                 
-                document.getElementById('resDeepTheory').innerText = `${targetRtp.toFixed(2)}%`;
-                document.getElementById('resDeepActual').innerText = `${actualRtp}%`;
-                document.getElementById('resDeepHitFreq').innerText = `${hitFrequency}%`;
+                safeSetText('resDeepTheory', `${targetRtp.toFixed(2)}%`);
+                safeSetText('resDeepActual', `${actualRtp}%`);
+                safeSetText('resDeepHitFreq', `${hitFrequency}%`); // <--- Restored Safe Target
                 
                 // Win/Loss Ratio
                 let lossCount = maxSpins - totalWinningSpins;
                 let winPct = ((totalWinningSpins / maxSpins) * 100).toFixed(2);
                 let lossPct = ((lossCount / maxSpins) * 100).toFixed(2);
-                document.getElementById('resDeepWinPctLabel').innerText = `WIN: ${winPct}%`;
-                document.getElementById('resDeepLossPctLabel').innerText = `LOSS: ${lossPct}%`;
-                document.getElementById('resDeepWinBar').style.width = `${winPct}%`;
+                
+                safeSetText('resDeepWinPctLabel', `WIN: ${winPct}%`);
+                safeSetText('resDeepLossPctLabel', `LOSS: ${lossPct}%`);
+                
+                const winBarEl = document.getElementById('resDeepWinBar');
+                if (winBarEl) winBarEl.style.width = `${winPct}%`;
                 
                 // Color Code RTP
                 const diff = actualRtp - targetRtp;
                 const actEl = document.getElementById('resDeepActual');
-                if (diff > 3) actEl.className = "text-danger fs-3 fw-black drop-shadow-[0_0_10px_red] animate-pulse";
-                else if (diff < -3) actEl.className = "text-warning fs-3 fw-black";
-                else actEl.className = "text-success fs-3 fw-black drop-shadow-[0_0_10px_lime]";
+                if (actEl) {
+                    if (diff > 3) actEl.className = "text-danger fs-3 fw-black drop-shadow-[0_0_10px_red] animate-pulse";
+                    else if (diff < -3) actEl.className = "text-warning fs-3 fw-black";
+                    else actEl.className = "text-success fs-3 fw-black drop-shadow-[0_0_10px_lime]";
+                }
 
                 // 2. Build Payout Contribution Matrix (Wins Only)
                 let payoutHtml = '';
@@ -421,7 +444,8 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
                         </tr>
                     `;
                 }
-                document.getElementById('deepPayoutMatrix').innerHTML = payoutHtml;
+                const matrixEl = document.getElementById('deepPayoutMatrix');
+                if(matrixEl) matrixEl.innerHTML = payoutHtml;
 
                 // 3. Distribution Matrix (All Spawns)
                 const totalSyms = maxSpins * 3;
@@ -436,22 +460,25 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
                             </div>
                         </div>`;
                 }
-                document.getElementById('deepSymDistro').innerHTML = distHtml;
+                const distroEl = document.getElementById('deepSymDistro');
+                if(distroEl) distroEl.innerHTML = distHtml;
 
-                document.getElementById('deepResults').classList.remove('d-none');
+                const resultsEl = document.getElementById('deepResults');
+                if (resultsEl) resultsEl.classList.remove('d-none');
             }
         }, 40); 
     }
 
     function stopDeepSim() {
         if (simInterval) clearInterval(simInterval);
-        document.getElementById('btnStartSim').classList.remove('d-none');
-        document.getElementById('btnStopSim').classList.add('d-none');
+        document.getElementById('btnStartSim')?.classList.remove('d-none');
+        document.getElementById('btnStopSim')?.classList.add('d-none');
     }
 
     // --- PDF EXPORT FUNCTION ---
     function exportDeepPDF() {
         const element = document.getElementById('deepResults');
+        if (!element) return;
         
         element.classList.add('bg-black', 'p-4');
         
