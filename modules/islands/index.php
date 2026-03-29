@@ -94,16 +94,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     }
 }
 
-// --- 2. FETCH ISLANDS, SPAWN RATES, PAYOUTS & LIVE TELEMETRY ---
+// --- 2. FETCH ISLANDS, PHYSICAL REEL STRIPS, PAYOUTS & LIVE TELEMETRY ---
 $islands = $pdo->query("SELECT * FROM islands WHERE id <= 5 ORDER BY id ASC")->fetchAll(PDO::FETCH_ASSOC);
 
 // Fetch active players per island
 $activePlayersQuery = $pdo->query("SELECT island_id, COUNT(*) as active_count FROM machines WHERE status = 'occupied' GROUP BY island_id")->fetchAll(PDO::FETCH_KEY_PAIR);
 
-// Fetch Spawn Rates
-$ratesQuery = $pdo->query("SELECT * FROM reel_spawn_rates");
-$allRates = $ratesQuery->fetchAll(PDO::FETCH_ASSOC);
-$spawnRatesByIsland = [];
+// V6.8 Fetch Physical Reel Stops (Replaces abstract spawn rates)
+$stopsQuery = $pdo->query("SELECT * FROM reel_stops ORDER BY island_id, reel_index, stop_pos");
+$allStops = $stopsQuery->fetchAll(PDO::FETCH_ASSOC);
+$stripsByIsland = [];
 
 // Fetch Payout Multipliers
 $payoutsQuery = $pdo->query("SELECT * FROM island_symbol_payouts");
@@ -116,11 +116,14 @@ $allWinRates = $winRatesQuery->fetchAll(PDO::FETCH_ASSOC);
 $winRatesByIsland = [];
 
 // Fallbacks & Mapping
+$defaultStrip = [6,4,2,6,5,3,6,7,6,4,2,6,5,3,6,7,6,2,4,6,5,7,6,3,1,6,4,5,6,7];
+
 foreach($islands as $isl) {
-    $spawnRatesByIsland[$isl['id']] = [
-        1 => ['sym_1'=>10, 'sym_2'=>40, 'sym_3'=>100, 'sym_4'=>200, 'sym_5'=>200, 'sym_6'=>250, 'sym_7'=>200],
-        2 => ['sym_1'=>10, 'sym_2'=>40, 'sym_3'=>100, 'sym_4'=>200, 'sym_5'=>200, 'sym_6'=>250, 'sym_7'=>200],
-        3 => ['sym_1'=>10, 'sym_2'=>40, 'sym_3'=>100, 'sym_4'=>200, 'sym_5'=>200, 'sym_6'=>250, 'sym_7'=>200]
+    // Inject default physical strips
+    $stripsByIsland[$isl['id']] = [
+        1 => $defaultStrip,
+        2 => $defaultStrip,
+        3 => $defaultStrip
     ];
     $payoutsByIsland[$isl['id']] = [
         'sym_1_mult'=>100, 'sym_2_mult'=>20, 'sym_3_mult'=>10, 'sym_4_mult'=>10, 'sym_5_mult'=>15, 'sym_6_mult'=>2, 'sym_7_mult'=>0
@@ -130,20 +133,32 @@ foreach($islands as $isl) {
     ];
 }
 
-foreach ($allRates as $r) { $spawnRatesByIsland[$r['island_id']][$r['reel_index']] = $r; }
+// Overwrite with DB strips
+$processedIslands = [];
+foreach ($allStops as $s) {
+    if (!isset($processedIslands[$s['island_id']][$s['reel_index']])) {
+        $stripsByIsland[$s['island_id']][$s['reel_index']] = []; // Clear fallback on first DB stop
+        $processedIslands[$s['island_id']][$s['reel_index']] = true;
+    }
+    $stripsByIsland[$s['island_id']][$s['reel_index']][$s['stop_pos']] = (int)$s['symbol_id'];
+}
+
 foreach ($allPayouts as $p) { $payoutsByIsland[$p['island_id']] = $p; }
 foreach ($allWinRates as $wr) { $winRatesByIsland[$wr['island_id']] = $wr; }
 
-// --- 3. VOLATILITY DNA & AI INSIGHTS ---
+// --- 3. VOLATILITY DNA & AI INSIGHTS (Calculated from Physical Strips) ---
 $islandInsights = [];
 foreach($islands as $isl) {
-    $rates = $spawnRatesByIsland[$isl['id']];
+    $strips = $stripsByIsland[$isl['id']];
     $totalHigh = 0; $totalLow = 0;
     
     for ($reel = 1; $reel <= 3; $reel++) {
-        if (isset($rates[$reel])) {
-            $totalHigh += $rates[$reel]['sym_1'] + $rates[$reel]['sym_2'] + $rates[$reel]['sym_3'];
-            $totalLow += $rates[$reel]['sym_4'] + $rates[$reel]['sym_5'] + $rates[$reel]['sym_6'] + $rates[$reel]['sym_7'];
+        if (isset($strips[$reel])) {
+            foreach ($strips[$reel] as $sym) {
+                if (in_array($sym, [2, 3])) $totalHigh++;
+                elseif (in_array($sym, [4, 5, 6, 7])) $totalLow++;
+                // Note: Sym 1 (GJP) is intentionally excluded from baseline volatility tracking as it triggers independently
+            }
         }
     }
     
@@ -152,11 +167,11 @@ foreach($islands as $isl) {
     $lowPct = 100 - $highPct;
     
     if ($highPct >= 20) {
-        $insight = "High variance detected. Expect rare, but massive payouts."; $color = "danger";
+        $insight = "High variance detected in reel tape. Expect rare, but massive payouts."; $color = "danger";
     } elseif ($highPct <= 10) {
-        $insight = "Low variance drip-feed. Constant small wins for high retention."; $color = "success";
+        $insight = "Low variance tape design. Constant visual drip-feed for high retention."; $color = "success";
     } else {
-        $insight = "Balanced mathematical ecosystem. Steady progression."; $color = "info";
+        $insight = "Balanced visual ecosystem. Steady symbol progression."; $color = "info";
     }
     
     $islandInsights[$isl['id']] = ['high_pct' => $highPct, 'low_pct' => $lowPct, 'text' => $insight, 'color' => $color];
@@ -167,7 +182,7 @@ $auditLogs = $pdo->query("
     SELECT al.action, al.created_at, au.username 
     FROM audit_logs al 
     LEFT JOIN admin_users au ON al.admin_id = au.id 
-    WHERE al.target_table IN ('islands', 'island_symbol_payouts', 'island_win_rates') 
+    WHERE al.target_table IN ('islands', 'island_symbol_payouts', 'island_win_rates', 'reel_stops') 
     ORDER BY al.created_at DESC LIMIT 15
 ")->fetchAll(PDO::FETCH_ASSOC);
 
@@ -329,9 +344,9 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
                     </button>
                     <?php endif; ?>
                     
-                    <!-- SPAWN RATES -->
+                    <!-- SPAWN RATES (Now Virtual Reels) -->
                     <a href="?route=content/spawn_rates&island=<?= $isl['id'] ?>" class="btn btn-outline-warning w-100 fw-bold py-2 shadow-sm text-[11px] tracking-widest hover:bg-warning hover:text-black transition-colors">
-                        <i class="bi bi-gear-wide-connected"></i> ADJUST SPAWN RATES
+                        <i class="bi bi-vinyl"></i> CONFIGURE VIRTUAL REELS
                     </a>
 
                     <!-- QUICK SIM -->
@@ -640,9 +655,9 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
         new bootstrap.Modal(document.getElementById('editIslandModal')).show();
     }
 
-    // --- QUICK 10K SIMULATION ---
+    // --- QUICK 10K SIMULATION (V6.8 STRIP COMPATIBLE) ---
     const DB_ISLANDS = <?= json_encode($islands) ?>;
-    const DB_SPAWN_RATES = <?= json_encode($spawnRatesByIsland) ?>;
+    const DB_STRIPS = <?= json_encode($stripsByIsland) ?>;
     const DB_PAYOUTS = <?= json_encode($payoutsByIsland) ?>;
     const DB_WIN_RATES = <?= json_encode($winRatesByIsland) ?>;
     
@@ -650,7 +665,7 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
 
     function startSimulation(islandId) {
         const island = DB_ISLANDS.find(i => parseInt(i.id) === islandId);
-        const rates = DB_SPAWN_RATES[islandId];
+        const strips = DB_STRIPS[islandId];
         const pouts = DB_PAYOUTS[islandId];
         const wRates = DB_WIN_RATES[islandId];
         
@@ -662,8 +677,9 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
         document.getElementById('liveRtp').innerText = '0.00%';
         
         let logBuffer = [
-            `> Initializing Quick Sim for [${island.name}]...`,
+            `> Initializing V6.8 Quick Sim for [${island.name}]...`,
             `> Target Base RTP: <span style="color:#0ff">${island.rtp_rate}%</span>`,
+            `> Reading physical reel tapes...`,
             `> Executing 10,000 spins at 1,000 MMK bet...`,
             `--------------------------------------------------`
         ];
@@ -681,18 +697,6 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
         };
         const winSymWeights = {2: 5, 3: 10, 4: 25, 5: 20, 6: 25, 7: 15};
         
-        const pickSymbol = (weightsObj) => {
-            const arr = Object.values(weightsObj);
-            const total = arr.reduce((a,b)=>a+parseInt(b), 0);
-            let rand = Math.floor(Math.random() * total) + 1;
-            let sum = 0;
-            for(let i=1; i<=7; i++) {
-                sum += parseInt(weightsObj[`sym_${i}`]);
-                if (rand <= sum) return i;
-            }
-            return 7;
-        };
-
         const pickWinSymbol = () => {
             const arr = Object.values(winSymWeights);
             const total = arr.reduce((a,b)=>a+b, 0);
@@ -711,7 +715,7 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
         
         let totalIn = 0, totalOut = 0, totalWinningSpins = 0;
         let hits = {1:0, 2:0, 3:0, 4:0, 5:0, 6:0, 7:0}; 
-        const symbolIcons = {1:'[7]', 2:'[CHR]', 3:'[BAR]', 4:'[BEL]', 5:'[MEL]', 6:'[CHE]', 7:'[REP]'};
+        const symbolIcons = {1:'[GJP]', 2:'[LOGO]', 3:'[7SEV]', 4:'[MELN]', 5:'[BELL]', 6:'[CHER]', 7:'[REPL]'};
 
         simInterval = setInterval(() => {
             let batchLogs = [];
@@ -719,10 +723,15 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
                 spins++;
                 totalIn += bet;
 
-                let r1 = pickSymbol(rates[1]); let r2 = pickSymbol(rates[2]); let r3 = pickSymbol(rates[3]);
+                // V6.8 Virtual Reel Sampling (Simulates entropy logic)
+                const entropy = [Math.random(), Math.random(), Math.random()];
+                let r1 = strips[1][Math.floor(entropy[0] * strips[1].length)];
+                let r2 = strips[2][Math.floor(entropy[1] * strips[2].length)];
+                let r3 = strips[3][Math.floor(entropy[2] * strips[3].length)];
+                
                 hits[r1]++; hits[r2]++; hits[r3]++;
 
-                // Ultra High Precision JS Simulator Hit Engine (V5.5)
+                // Ultra High Precision JS Simulator Hit Engine (V6.8)
                 let isHit = (Math.random() * 10000000000) <= (baseHitRate * 100000000);
                 
                 if (isHit) {
@@ -750,7 +759,7 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
 
             if (spins >= MAX_SPINS) {
                 clearInterval(simInterval);
-                logBuffer.push(`<div class="terminal-line mt-3" style="color:#0f0; font-weight:900;">> QUICK SIM COMPLETE.</div>`);
+                logBuffer.push(`<div class="terminal-line mt-3" style="color:#0f0; font-weight:900;">> V6.8 QUICK SIM COMPLETE.</div>`);
                 term.innerHTML = logBuffer.join('');
                 term.scrollTop = term.scrollHeight;
                 
