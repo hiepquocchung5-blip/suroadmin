@@ -18,6 +18,11 @@ $payoutsQuery = $pdo->query("SELECT * FROM island_symbol_payouts");
 $allPayouts = $payoutsQuery->fetchAll(PDO::FETCH_ASSOC);
 $payoutsByIsland = [];
 
+// Fetch Jackpot Configurations for Simulation
+$jackpotsQuery = $pdo->query("SELECT * FROM global_jackpots WHERE island_id IS NOT NULL");
+$allJackpots = $jackpotsQuery->fetchAll(PDO::FETCH_ASSOC);
+$jackpotsByIsland = [];
+
 // Fallbacks & Mapping
 $defaultStrip = [6,4,2,6,5,3,6,7,6,4,2,6,5,3,6,7,6,2,4,6,5,7,6,3,1,6,4,5,6,7];
 
@@ -31,9 +36,12 @@ foreach($islands as $isl) {
     $payoutsByIsland[$isl['id']] = [
         'sym_1_mult'=>100, 'sym_2_mult'=>20, 'sym_3_mult'=>10, 'sym_4_mult'=>10, 'sym_5_mult'=>15, 'sym_6_mult'=>2, 'sym_7_mult'=>0
     ];
+    $jackpotsByIsland[$isl['id']] = [
+        'base_seed' => 3000000, 'trigger_amount' => 3600000, 'max_amount' => 7200000, 'contribution_rate' => 0.015
+    ];
 }
 
-// Overwrite with DB strips
+// Overwrite with DB data
 $processedIslands = [];
 foreach ($allStops as $s) {
     if (!isset($processedIslands[$s['island_id']][$s['reel_index']])) {
@@ -44,6 +52,7 @@ foreach ($allStops as $s) {
 }
 
 foreach ($allPayouts as $p) { $payoutsByIsland[$p['island_id']] = $p; }
+foreach ($allJackpots as $j) { $jackpotsByIsland[$j['island_id']] = $j; }
 
 require_once ADMIN_BASE_PATH . '/layout/main.php';
 ?>
@@ -221,6 +230,33 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
                                 </div>
                             </div>
                         </div>
+
+                        <!-- GJP SPECIFIC TELEMETRY -->
+                        <h6 class="text-purple-400 font-mono text-[10px] uppercase tracking-widest mb-2 border-bottom border-purple-500 border-opacity-30 pb-1 mt-2">
+                            <i class="bi bi-gem text-purple-400 me-1"></i> GRAND JACKPOT METRICS
+                        </h6>
+                        <div class="bg-purple-900 bg-opacity-10 border border-purple-500 border-opacity-30 rounded p-3 mb-4 font-mono shadow-[inset_0_0_20px_rgba(168,85,247,0.1)]">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <span class="text-gray-400 text-[10px]">TOTAL JP TRIGGERS</span>
+                                <span class="text-purple-400 fw-bold fs-5" id="resGjpHits">0</span>
+                            </div>
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <span class="text-gray-400 text-[10px]">AVG SPINS PER DROP</span>
+                                <span class="text-white fw-bold" id="resGjpAvgSpins">0</span>
+                            </div>
+                            <div class="d-flex justify-content-between align-items-center mb-3 pb-3 border-bottom border-white border-opacity-10">
+                                <span class="text-gray-400 text-[10px]">AVG DROP AMOUNT</span>
+                                <span class="text-warning fw-bold" id="resGjpAvgAmount">0 MMK</span>
+                            </div>
+
+                            <!-- Organic Near-Miss Tracking -->
+                            <div class="text-[9px] text-gray-500 uppercase tracking-widest mb-2 fw-bold">Physical Strip Observations (Payline)</div>
+                            <div class="d-flex justify-content-between text-[10px]">
+                                <span>Single <b class="text-danger">[1]</b>: <span id="gjp1Count" class="text-white fw-bold ms-1">0</span></span>
+                                <span>Teaser <b class="text-danger">[1-1]</b>: <span id="gjp2Count" class="text-white fw-bold ms-1">0</span></span>
+                                <span>Natural <b class="text-danger">[1-1-1]</b>: <span id="gjp3Count" class="text-info fw-bold ms-1">0</span></span>
+                            </div>
+                        </div>
                         
                         <!-- PAYOUT CONTRIBUTION MATRIX -->
                         <h6 class="text-gray-400 font-mono text-[10px] uppercase tracking-widest mb-2 border-bottom border-secondary pb-1 mt-2">
@@ -267,6 +303,7 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
     const DB_ISLANDS = <?= json_encode($islands) ?>;
     const DB_STRIPS = <?= json_encode($stripsByIsland) ?>;
     const DB_PAYOUTS = <?= json_encode($payoutsByIsland) ?>;
+    const DB_JACKPOTS = <?= json_encode($jackpotsByIsland) ?>;
     
     let simTimeout = null;
     let isSimRunning = false;
@@ -289,6 +326,7 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
         const island = DB_ISLANDS.find(i => parseInt(i.id) === islandId);
         const strips = DB_STRIPS[islandId];
         const pouts = DB_PAYOUTS[islandId];
+        const gjpData = DB_JACKPOTS[islandId] || { base_seed: 3000000, trigger_amount: 3600000, max_amount: 7200000, contribution_rate: 0.015 };
         
         isSimRunning = true;
         document.getElementById('btnStartSim').classList.add('d-none');
@@ -316,6 +354,7 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
             `> <span style="color:#fff;">[SYSTEM]</span> INITIATING LOCAL CPU AUDIT PROTOCOL...`,
             `> <span style="color:#fff;">[TARGET]</span> Ecosystem: ${island.name}`,
             `> <span style="color:#fff;">[CONFIG]</span> Constructing 3x3 Physical Virtual Reels...`,
+            `> <span style="color:#fff;">[JACKPOT]</span> Active Math Model Loaded (Base: ${gjpData.base_seed})`,
             `> <span style="color:#fff;">[PARAMS]</span> Executing ${maxSpins.toLocaleString()} iterations at ${bet.toLocaleString()} MMK bet...`,
             `> --------------------------------------------------`
         ];
@@ -334,6 +373,16 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
         let totalOut = 0;
         let totalWinningSpins = 0;
         
+        // GJP Telemetry
+        let simJackpot = parseFloat(gjpData.base_seed);
+        const gjpMax = parseFloat(gjpData.max_amount);
+        const gjpTrigger = parseFloat(gjpData.trigger_amount);
+        const gjpContrib = parseFloat(gjpData.contribution_rate);
+        
+        let totalGjpHits = 0;
+        let sumGjpPayouts = 0;
+        let naturalGjpSpawns = { '1_count': 0, '2_count': 0, '3_count': 0 };
+
         let hits = {1:0, 2:0, 3:0, 4:0, 5:0, 6:0, 7:0}; 
         let winCounts = {1:0, 2:0, 3:0, 4:0, 5:0, 6:0, 7:0};
         let winPayouts = {1:0, 2:0, 3:0, 4:0, 5:0, 6:0, 7:0};
@@ -354,9 +403,12 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
 
             for(; spins < chunkLimit; spins++) {
                 totalIn += bet;
+                
+                // Add to progressive pot
+                simJackpot += (bet * gjpContrib);
 
-                // 1. Cryptographic Entropy Extraction Simulation
-                const entropy = [Math.random(), Math.random(), Math.random(), Math.random()];
+                // 1. Cryptographic Entropy Extraction Simulation (5 chunks for V6.8)
+                const entropy = [Math.random(), Math.random(), Math.random(), Math.random(), Math.random()];
 
                 // 2. Physical Reel Mapping with Wrap-around
                 for (let i = 1; i <= 3; i++) {
@@ -374,12 +426,24 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
 
                 // 3. Independent Jackpot Evaluation (V6.8 Math)
                 let isGrandJackpot = false;
-                // Simplified GJP odds for simulation speed (1 in 5M chance per spin as baseline)
-                if (entropy[3] <= (1 / 5000000)) {
+                let progress = Math.max(0, (simJackpot - gjpTrigger) / Math.max(1, (gjpMax - gjpTrigger)));
+                let noise = (entropy[4] * 0.2);
+                let baseOdds = Math.max(500, Math.floor(15000000 / Math.max(1, bet)));
+                let adjustedOdds = Math.max(2, Math.floor(baseOdds * (1 - progress + noise)));
+                let jpRollTarget = 1 / adjustedOdds;
+
+                if (entropy[3] <= jpRollTarget || simJackpot >= gjpMax) {
                     isGrandJackpot = true;
+                    totalGjpHits++;
+                    sumGjpPayouts += simJackpot;
+                    
+                    batchLogs.push(`<div class="terminal-line"><span style="color:#f0f">[#${(spins+1).toString().padStart(8,'0')}]</span> ASTRONOMICAL! GRAND JACKPOT TRIGGERED -> <span style="color:#ff0">+${Math.floor(simJackpot).toLocaleString()} MMK</span></div>`);
+                    
+                    // Reset Pot
+                    simJackpot = parseFloat(gjpData.base_seed);
                 }
 
-                // 4. Line Evaluation
+                // 4. Line Evaluation & Organic GJP Spawn Tracking
                 let spinWin = 0;
                 let isLineWin = false;
 
@@ -391,8 +455,15 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
                     // Tracking raw spawns for the distribution matrix
                     hits[s1]++; hits[s2]++; hits[s3]++;
 
+                    // Track organic GJP symbol spawns on paylines (Teasers & Natural drops)
+                    let onesOnLine = (s1 === 1 ? 1 : 0) + (s2 === 1 ? 1 : 0) + (s3 === 1 ? 1 : 0);
+                    if (onesOnLine === 1) naturalGjpSpawns['1_count']++;
+                    if (onesOnLine === 2) naturalGjpSpawns['2_count']++;
+                    if (onesOnLine === 3) naturalGjpSpawns['3_count']++;
+
                     if (s1 === s2 && s2 === s3) {
                         isLineWin = true;
+                        // Don't double pay 1 if the jackpot already triggered
                         if (s1 === 1 && !isGrandJackpot) {
                             spinWin += bet * multipliers[s1];
                         } else {
@@ -403,21 +474,25 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
                 }
 
                 if (isGrandJackpot) {
-                    spinWin += 5000000; // Mock 5M GJP win for simulation
                     winCounts[1]++;
                     isLineWin = true;
-                    batchLogs.push(`<div class="terminal-line"><span style="color:#f0f">[#${(spins+1).toString().padStart(8,'0')}]</span> ASTRONOMICAL! GRAND JACKPOT TRIGGERED -> <span style="color:#ff0">+5,000,000 MMK</span></div>`);
+                    spinWin += 0; // Jackpot amount handled independently, but spin is marked as a win
                 }
 
-                if (isLineWin && spinWin > 0) {
+                if (isLineWin && (spinWin > 0 || isGrandJackpot)) {
                     totalOut += spinWin;
                     totalWinningSpins++;
-                    // Attribute payout to the highest winning symbol on this spin for simple matrix display
-                    let dominantSym = result[paylines[0][0]]; 
-                    winPayouts[dominantSym] += spinWin;
                     
-                    if (spinWin >= bet * 15 && !isGrandJackpot) {
-                        batchLogs.push(`<div class="terminal-line"><span style="color:#0aa">[#${(spins+1).toString().padStart(8,'0')}]</span> CRITICAL PAYOUT! -> <span style="color:#ff0">+${spinWin.toLocaleString()} MMK</span></div>`);
+                    // Attribute payout to the highest winning symbol on this spin for simple matrix display
+                    let dominantSym = isGrandJackpot ? 1 : result[paylines[0][0]]; 
+                    
+                    if (!isGrandJackpot) {
+                        winPayouts[dominantSym] += spinWin;
+                        if (spinWin >= bet * 15) {
+                            batchLogs.push(`<div class="terminal-line"><span style="color:#0aa">[#${(spins+1).toString().padStart(8,'0')}]</span> CRITICAL PAYOUT! -> <span style="color:#ff0">+${spinWin.toLocaleString()} MMK</span></div>`);
+                        }
+                    } else {
+                        // For display, we add the average jackpot hit size to winPayouts[1] later in finalize
                     }
                 }
             }
@@ -437,8 +512,10 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
             }
 
             // Live HUD Updates
-            let currentRtp = totalIn > 0 ? ((totalOut / totalIn) * 100).toFixed(2) : 0;
-            let currentPnl = totalIn - totalOut;
+            // Add estimated GJP total to current RTP to keep it accurate mid-simulation
+            let currentTotalOut = totalOut + sumGjpPayouts; 
+            let currentRtp = totalIn > 0 ? ((currentTotalOut / totalIn) * 100).toFixed(2) : 0;
+            let currentPnl = totalIn - currentTotalOut;
             
             safeSetText('deepOdometer', spins.toLocaleString());
             safeSetText('deepRtp', currentRtp + '%');
@@ -454,7 +531,7 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
                 // Schedule next chunk immediately to keep UI unblocked
                 simTimeout = setTimeout(runChunk, 10);
             } else {
-                finalizeSim(targetRtp, maxSpins, totalIn, totalOut, totalWinningSpins, winCounts, winPayouts, hits, multipliers, names, colors);
+                finalizeSim(targetRtp, maxSpins, totalIn, totalOut, totalWinningSpins, winCounts, winPayouts, hits, multipliers, names, colors, totalGjpHits, sumGjpPayouts, naturalGjpSpawns);
             }
         }
 
@@ -462,7 +539,7 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
         simTimeout = setTimeout(runChunk, 10);
     }
 
-    function finalizeSim(targetRtp, maxSpins, totalIn, totalOut, totalWinningSpins, winCounts, winPayouts, hits, multipliers, names, colors) {
+    function finalizeSim(targetRtp, maxSpins, totalIn, totalOut, totalWinningSpins, winCounts, winPayouts, hits, multipliers, names, colors, totalGjpHits, sumGjpPayouts, naturalGjpSpawns) {
         stopDeepSim();
         const term = document.getElementById('deepTerminal');
         let logBuffer = [
@@ -472,8 +549,9 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
         term.innerHTML = logBuffer.join('');
         term.scrollTop = term.scrollHeight;
         
-        // 1. Core Metrics
-        let actualRtp = ((totalOut / totalIn) * 100).toFixed(2);
+        // 1. Core Metrics (Including Jackpots)
+        let absoluteTotalOut = totalOut + sumGjpPayouts;
+        let actualRtp = ((absoluteTotalOut / totalIn) * 100).toFixed(2);
         let hitFrequency = ((totalWinningSpins / maxSpins) * 100).toFixed(2);
         
         safeSetText('resDeepTheory', `${targetRtp.toFixed(2)}%`);
@@ -500,7 +578,21 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
             else actEl.className = "text-success fs-3 fw-black drop-shadow-[0_0_10px_lime]";
         }
 
-        // 2. Build Payout Contribution Matrix (Wins Only)
+        // 2. Jackpot Telemetry Injection
+        safeSetText('resGjpHits', totalGjpHits.toLocaleString());
+        let avgSpinsGjp = totalGjpHits > 0 ? Math.floor(maxSpins / totalGjpHits) : 0;
+        safeSetText('resGjpAvgSpins', avgSpinsGjp > 0 ? `1 in ${avgSpinsGjp.toLocaleString()}` : 'N/A');
+        let avgAmountGjp = totalGjpHits > 0 ? Math.floor(sumGjpPayouts / totalGjpHits) : 0;
+        safeSetText('resGjpAvgAmount', avgAmountGjp > 0 ? `${avgAmountGjp.toLocaleString()} MMK` : 'N/A');
+        
+        safeSetText('gjp1Count', naturalGjpSpawns['1_count'].toLocaleString());
+        safeSetText('gjp2Count', naturalGjpSpawns['2_count'].toLocaleString());
+        safeSetText('gjp3Count', naturalGjpSpawns['3_count'].toLocaleString());
+
+        // Merge GJP into payouts for accurate matrix display
+        winPayouts[1] += sumGjpPayouts;
+
+        // 3. Build Payout Contribution Matrix (Wins Only)
         let payoutHtml = '';
         for(let i=1; i<=7; i++) {
             let sHits = winCounts[i];
@@ -514,7 +606,7 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
                     <td class="text-gray-400">x${multipliers[i]}</td>
                     <td class="text-white">${sHits.toLocaleString()}</td>
                     <td class="text-gray-300">${sShare}%</td>
-                    <td class="text-end text-success">${sPay.toLocaleString()}</td>
+                    <td class="text-end text-success">${Math.floor(sPay).toLocaleString()}</td>
                     <td class="text-end fw-black text-info">${sRtpCont}%</td>
                 </tr>
             `;
@@ -522,7 +614,7 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
         const matrixEl = document.getElementById('deepPayoutMatrix');
         if(matrixEl) matrixEl.innerHTML = payoutHtml;
 
-        // 3. Distribution Matrix (All Spawns)
+        // 4. Distribution Matrix (All Spawns)
         const totalSyms = maxSpins * 9; // 9 symbols per spin grid
         let distHtml = '';
         for(let i=1; i<=7; i++) {
