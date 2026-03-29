@@ -63,21 +63,14 @@ for ($i = 1; $i <= 3; $i++) {
     }
 }
 
-// Fetch V6 Configs for Simulation Environment
-$winRatesQuery = $pdo->query("SELECT * FROM island_win_rates");
-$allWinRates = $winRatesQuery->fetchAll(PDO::FETCH_ASSOC);
-$winRatesByIsland = [];
+// Fetch Configs for Simulation Environment
+$payoutsQuery = $pdo->prepare("SELECT * FROM island_symbol_payouts WHERE island_id = ?");
+$payoutsQuery->execute([$currentIsland]);
+$payouts = $payoutsQuery->fetch(PDO::FETCH_ASSOC) ?: ['sym_1_mult'=>100, 'sym_2_mult'=>20, 'sym_3_mult'=>10, 'sym_4_mult'=>10, 'sym_5_mult'=>15, 'sym_6_mult'=>2, 'sym_7_mult'=>0];
 
-$payoutsQuery = $pdo->query("SELECT * FROM island_symbol_payouts");
-$allPayouts = $payoutsQuery->fetchAll(PDO::FETCH_ASSOC);
-$payoutsByIsland = [];
-
-foreach($islands as $isl) {
-    $winRatesByIsland[$isl['id']] = ['base_hit_rate'=>22.00000000]; // Default fallback
-    $payoutsByIsland[$isl['id']] = ['sym_1_mult'=>100, 'sym_2_mult'=>20, 'sym_3_mult'=>10, 'sym_4_mult'=>10, 'sym_5_mult'=>15, 'sym_6_mult'=>2, 'sym_7_mult'=>0];
-}
-foreach ($allWinRates as $wr) { $winRatesByIsland[$wr['island_id']] = $wr; }
-foreach ($allPayouts as $p) { $payoutsByIsland[$p['island_id']] = $p; }
+$jackpotsQuery = $pdo->prepare("SELECT * FROM global_jackpots WHERE island_id = ?");
+$jackpotsQuery->execute([$currentIsland]);
+$gjpData = $jackpotsQuery->fetch(PDO::FETCH_ASSOC) ?: ['base_seed' => 3000000, 'trigger_amount' => 3600000, 'max_amount' => 7200000, 'contribution_rate' => 0.015];
 
 // Symbol Definitions for UI
 $symDefs = [
@@ -110,19 +103,24 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
     .strip-container::-webkit-scrollbar-thumb { background-color: #0dcaf0; border-radius: 10px; }
     
     .sym-select { font-family: 'JetBrains Mono', monospace; font-weight: bold; font-size: 0.8rem; text-align: center; transition: all 0.3s; }
+    
+    .analytic-badge { font-size: 0.6rem; padding: 2px 6px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.2); font-family: monospace; }
 </style>
 
-<div class="d-flex justify-content-between align-items-end mb-4 relative z-10">
+<div class="d-flex justify-content-between align-items-end mb-4 relative z-10 flex-wrap gap-3">
     <div>
         <h2 class="fw-black text-warning italic tracking-widest mb-0 drop-shadow-[0_0_10px_rgba(234,179,8,0.5)]">
-            <i class="bi bi-vinyl"></i> VIRTUAL REEL STRIPS
+            <i class="bi bi-vinyl"></i> VIRTUAL TAPE STUDIO
         </h2>
-        <p class="text-muted small mt-1 font-mono">Physical stop sequence architecture. Determines exact symbol layouts.</p>
+        <p class="text-muted small mt-1 font-mono">Design the physical 30-stop reel sequences. Changes immediately impact ecosystem volatility.</p>
     </div>
     
     <div class="d-flex gap-2">
+        <button class="btn btn-outline-info fw-bold px-3 rounded-pill shadow-sm hover:scale-105 transition-transform" data-bs-toggle="modal" data-bs-target="#guideModal">
+            <i class="bi bi-journal-code"></i> TAPE ARCHITECT GUIDE
+        </button>
         <button class="btn btn-outline-danger fw-bold px-3 rounded-pill shadow-sm hover:scale-105 transition-transform" onclick="resetToOriginal()">
-            <i class="bi bi-arrow-counterclockwise"></i> REVERT
+            <i class="bi bi-arrow-counterclockwise"></i> REVERT TO DB
         </button>
     </div>
 </div>
@@ -158,26 +156,16 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
         <div class="position-absolute top-0 end-0 opacity-10"><i class="bi bi-cpu display-1"></i></div>
         
         <div class="row align-items-center position-relative z-10">
-            <div class="col-md-6 border-end border-white border-opacity-10">
-                <h6 class="text-info fw-black tracking-widest uppercase mb-3"><i class="bi bi-calculator"></i> V6.4 Physics Engine</h6>
-                <div class="text-[10px] text-gray-400 font-mono mb-2">
-                    The simulator reads this exact 30-stop tape and performs a 10-Billion scale RNG hash check against the Target Hit Rate to determine the payout structure.
-                </div>
-                <div class="d-flex gap-3">
-                    <div class="bg-black bg-opacity-50 p-2 rounded border border-white border-opacity-10 text-center flex-1">
-                        <span class="d-block text-[9px] text-gray-500 uppercase fw-bold">Target Hit Rate</span>
-                        <span class="text-cyan-400 font-mono fw-black fs-5"><?= number_format($winRatesByIsland[$currentIsland]['base_hit_rate'], 4) ?>%</span>
-                    </div>
-                    <div class="bg-black bg-opacity-50 p-2 rounded border border-white border-opacity-10 text-center flex-1">
-                        <span class="d-block text-[9px] text-gray-500 uppercase fw-bold">Target RTP Cap</span>
-                        <span class="text-warning font-mono fw-black fs-5"><?= number_format($winRatesByIsland[$currentIsland]['max_rtp_cap'], 2) ?>%</span>
-                    </div>
+            <div class="col-md-8 border-end border-white border-opacity-10">
+                <h6 class="text-info fw-black tracking-widest uppercase mb-3"><i class="bi bi-calculator"></i> PURE MATH SANDBOX (V6.8)</h6>
+                <div class="text-[10px] text-gray-400 font-mono mb-2 pe-4">
+                    The simulator reads your DOM inputs below and constructs a physical 3x3 grid via cryptographic wrap-around logic. It organically evaluates all 5 paylines without forcing AI hits, giving you the true, raw baseline RTP of your tape design.
                 </div>
             </div>
 
-            <div class="col-md-6 ps-md-4">
+            <div class="col-md-4 ps-md-4">
                 <button type="button" class="btn btn-outline-info w-100 fw-black tracking-widest py-4 rounded-pill shadow-[0_0_15px_rgba(13,202,240,0.3)] hover:scale-105 active:scale-95 transition-transform" onclick="startMatrixSim()">
-                    <i class="bi bi-play-circle-fill me-1 fs-5"></i> INITIATE 10K TEST
+                    <i class="bi bi-play-circle-fill me-1 fs-5"></i> TEST TAPE YIELD (10K)
                 </button>
             </div>
         </div>
@@ -193,7 +181,11 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
                 <div class="bg-black bg-opacity-80 p-3 border-b border-white border-opacity-10 text-center relative overflow-hidden">
                     <div class="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/circuit-board.png')] opacity-10 pointer-events-none mix-blend-color-dodge"></div>
                     <h4 class="fw-black text-white italic tracking-widest m-0 text-uppercase relative z-10">REEL <?= $reel ?></h4>
-                    <div class="text-muted small font-mono mt-1 relative z-10">30 Physical Stops</div>
+                    
+                    <!-- LIVE ANALYTICS BADGES -->
+                    <div class="d-flex flex-wrap justify-content-center gap-1 mt-2 relative z-10" id="analytics-reel-<?= $reel ?>">
+                        <!-- Populated by JS -->
+                    </div>
                 </div>
 
                 <div class="p-2 bg-black bg-opacity-40 strip-container flex-1">
@@ -208,8 +200,9 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
                         <select 
                             name="reel_<?= $reel ?>_pos_<?= $pos ?>" 
                             id="r<?= $reel ?>_p<?= $pos ?>"
-                            class="form-select form-select-sm sym-select flex-1 rounded-0 border-0 <?= $def['bg'] ?> weight-input locked-input"
-                            onchange="updateSelectColor(this)"
+                            class="form-select form-select-sm sym-select flex-1 rounded-0 border-0 <?= $def['bg'] ?> weight-input locked-input reel-dropdown"
+                            data-reel="<?= $reel ?>"
+                            onchange="updateSelectColor(this); updateStripAnalytics();"
                         >
                             <?php foreach($symDefs as $id => $d): ?>
                                 <option value="<?= $id ?>" <?= $id === $currentSym ? 'selected' : '' ?> class="bg-dark text-white font-mono">
@@ -245,12 +238,47 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
     </div>
 </form>
 
-<!-- V6.4 QUICK SIMULATION MODAL -->
+<!-- ARCHITECT GUIDE MODAL -->
+<div class="modal fade" id="guideModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content glass-card bg-dark border-info shadow-[0_0_50px_rgba(13,202,240,0.3)]">
+            <div class="modal-header border-bottom border-secondary bg-black bg-opacity-50">
+                <h5 class="modal-title fw-black text-info italic tracking-widest"><i class="bi bi-journal-code me-2"></i> TAPE ARCHITECT MANUAL</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4 text-sm font-mono text-gray-300 space-y-4" style="max-height: 70vh; overflow-y: auto;">
+                
+                <div class="bg-black bg-opacity-50 p-3 rounded border border-secondary border-opacity-50">
+                    <h6 class="text-white fw-bold"><i class="bi bi-1-square-fill text-info me-2"></i> 1. The Physical Grid (Wrap-Around)</h6>
+                    <p class="mb-0 text-xs">The engine selects a random index (0-29) as the <strong>Middle Row</strong>. It then pulls index -1 for the Top Row, and index +1 for the Bottom Row, wrapping around the ends (0 wraps to 29). Do not clump all your premium symbols together, or they will appear on the same spin and waste theoretical RTP.</p>
+                </div>
+
+                <div class="bg-black bg-opacity-50 p-3 rounded border border-secondary border-opacity-50">
+                    <h6 class="text-white fw-bold"><i class="bi bi-2-square-fill text-warning me-2"></i> 2. Engineering Teasers (Near-Misses)</h6>
+                    <p class="mb-0 text-xs">To create psychological excitement, place premium symbols (like 7s or LOGOs) adjacently on Reels 1 and 2, but offset them heavily on Reel 3. This causes the engine to frequently drop "7-7-Cherry" combos, heightening player retention without bleeding funds.</p>
+                </div>
+
+                <div class="bg-black bg-opacity-50 p-3 rounded border border-secondary border-opacity-50">
+                    <h6 class="text-white fw-bold"><i class="bi bi-3-square-fill text-danger me-2"></i> 3. The Decoupled Grand Jackpot [1]</h6>
+                    <p class="mb-0 text-xs">The Grand Jackpot (GJP - Symbol 1) is now mathematically decoupled from the physical strips. Putting a [1] on the strips will allow it to naturally drop (and pay the fixed SYM_1 multiplier), but it will <strong>NOT</strong> trigger the progressive jackpot pool unless the independent engine RNG rolls the jackpot target. Use [1] sparingly as a teaser.</p>
+                </div>
+
+                <div class="bg-black bg-opacity-50 p-3 rounded border border-secondary border-opacity-50">
+                    <h6 class="text-white fw-bold"><i class="bi bi-4-square-fill text-success me-2"></i> 4. Bleed Fillers (Cherries)</h6>
+                    <p class="mb-0 text-xs">A healthy tape consists of ~40-50% Cherry (Sym 6) or Replay (Sym 7) stops. These provide the frequent small "bleed" hits required to keep players engaged during cold streaks.</p>
+                </div>
+
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- V6.8 QUICK SIMULATION MODAL -->
 <div class="modal fade" id="simModal" tabindex="-1" data-bs-backdrop="static">
     <div class="modal-dialog modal-fullscreen-lg-down modal-xl modal-dialog-centered">
         <div class="modal-content border-info" style="background-color: #050505; box-shadow: 0 0 50px rgba(0,243,255,0.3);">
             <div class="modal-header border-info border-opacity-50 bg-info bg-opacity-10 py-3">
-                <h6 class="modal-title font-mono text-info fw-bold"><i class="bi bi-cpu me-2"></i> STRIP SIMULATOR (V6.4 ENGINE)</h6>
+                <h6 class="modal-title font-mono text-info fw-bold"><i class="bi bi-cpu me-2"></i> PURE MATH SANDBOX (V6.8)</h6>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" onclick="stopSimulation()"></button>
             </div>
             
@@ -273,11 +301,11 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
                                 <span class="text-white fs-5 fw-bold" id="resSpins">0</span>
                             </div>
                             <div class="p-2 border border-info rounded bg-info bg-opacity-20 d-flex justify-content-between align-items-center shadow-[0_0_15px_rgba(0,243,255,0.3)]">
-                                <span class="text-info" style="font-size: 10px;">ACTUAL RTP YIELD</span>
+                                <span class="text-info" style="font-size: 10px;">NATURAL TAPE RTP</span>
                                 <span class="text-info fs-3 fw-black drop-shadow-md" id="resActualRtp">0%</span>
                             </div>
                             <div class="p-2 border border-secondary rounded bg-dark d-flex justify-content-between align-items-center">
-                                <span class="text-gray-400" style="font-size: 10px;">TOTAL WIN FREQ</span>
+                                <span class="text-gray-400" style="font-size: 10px;">HIT FREQUENCY</span>
                                 <span class="text-warning fs-5 fw-bold" id="resHitFreq">0%</span>
                             </div>
                         </div>
@@ -304,26 +332,49 @@ const SYM_CLASSES = {
     7: 'bg-info bg-opacity-25 text-info border-info'
 };
 
+const SYM_NAMES = {
+    1: 'GJP', 2: 'LOGO', 3: '7SEV', 4: 'MELN', 5: 'BELL', 6: 'CHER', 7: 'REPL'
+};
+
+const SYM_COLORS = {
+    1: '#ef4444', 2: '#a855f7', 3: '#f97316', 4: '#22c55e', 5: '#eab308', 6: '#ec4899', 7: '#06b6d4'
+};
+
 function updateSelectColor(selectEl) {
-    // Remove all old classes
     Object.values(SYM_CLASSES).forEach(cls => {
         selectEl.classList.remove(...cls.split(' '));
     });
-    // Add new classes
     const newClasses = SYM_CLASSES[selectEl.value];
-    if (newClasses) {
-        selectEl.classList.add(...newClasses.split(' '));
+    if (newClasses) selectEl.classList.add(...newClasses.split(' '));
+}
+
+// --- LIVE ANALYTICS TRACKER ---
+function updateStripAnalytics() {
+    for (let r = 1; r <= 3; r++) {
+        let counts = {1:0, 2:0, 3:0, 4:0, 5:0, 6:0, 7:0};
+        const selects = document.querySelectorAll(`select[data-reel="${r}"]`);
+        
+        selects.forEach(sel => {
+            let val = parseInt(sel.value);
+            if(counts[val] !== undefined) counts[val]++;
+        });
+
+        let html = '';
+        for (let symId = 1; symId <= 7; symId++) {
+            if (counts[symId] > 0) {
+                html += `<span class="analytic-badge" style="color: ${SYM_COLORS[symId]}">${counts[symId]}x ${SYM_NAMES[symId]}</span>`;
+            }
+        }
+        document.getElementById(`analytics-reel-${r}`).innerHTML = html;
     }
 }
 
 // Original Data for Revert Failsafe
 const ORIGINAL_STRIPS = <?= json_encode($virtualReels) ?>;
 
-// Embedded Constants for Simulation
-const ISL_ID = <?= $currentIsland ?>;
 const ISL_DATA = <?= json_encode($islands[array_search($currentIsland, array_column($islands, 'id'))] ?? $islands[0]) ?>;
-const WIN_RATES = <?= json_encode($winRatesByIsland[$currentIsland]) ?>;
-const PAYOUTS = <?= json_encode($payoutsByIsland[$currentIsland]) ?>;
+const PAYOUTS = <?= json_encode($payouts) ?>;
+const GJP_DATA = <?= json_encode($gjpData) ?>;
 
 // --- MATRIX SAFETY LOCK ---
 function toggleMatrixLock() {
@@ -365,9 +416,10 @@ function resetToOriginal() {
             }
         }
     }
+    updateStripAnalytics();
 }
 
-// --- V6.4 SANDBOX SIMULATION ENGINE ---
+// --- PURE MATH SANDBOX SIMULATION (V6.8) ---
 let simInterval = null;
 
 function startMatrixSim() {
@@ -384,18 +436,15 @@ function startMatrixSim() {
         }
     }
 
-    const targetRtp = parseFloat(ISL_DATA.rtp_rate || 70.0);
-    const baseHitRate = parseFloat(WIN_RATES.base_hit_rate || 22.0);
-    
     const multipliers = {
         1: parseFloat(PAYOUTS.sym_1_mult||100), 2: parseFloat(PAYOUTS.sym_2_mult||20), 3: parseFloat(PAYOUTS.sym_3_mult||10),
         4: parseFloat(PAYOUTS.sym_4_mult||10), 5: parseFloat(PAYOUTS.sym_5_mult||15), 6: parseFloat(PAYOUTS.sym_6_mult||2), 7: parseFloat(PAYOUTS.sym_7_mult||0)
     };
     
     let logBuffer = [
-        `> Initializing V6.4 Sandbox Engine...`,
-        `> Reading Active DOM Tape into Memory (30 stops per reel)...`,
-        `> Strict Constraint: <span style="color:#0ff">10-Billion Scale RNG Active</span>`,
+        `> Initializing Pure Math Sandbox...`,
+        `> Reading custom DOM Tapes into Memory...`,
+        `> Evaluating true organic grid intersections without AI forcing...`,
         `> Executing 10,000 spins at 1,000 MMK bet...`,
         `--------------------------------------------------`
     ];
@@ -409,24 +458,28 @@ function startMatrixSim() {
     const bet = 1000;
     
     let totalIn = 0, totalOut = 0, totalWinningSpins = 0;
-    const names = {1:'GJP', 2:'LOGO', 3:'7SEV', 4:'MELN', 5:'BELL', 6:'CHER', 7:'REPL'};
     const paylines = [[0, 1, 2], [3, 4, 5], [6, 7, 8], [0, 4, 8], [6, 4, 2]];
+    
+    // GJP State
+    let simJackpot = parseFloat(GJP_DATA.base_seed || 3000000);
+    const gjpMax = parseFloat(GJP_DATA.max_amount || 7200000);
+    const gjpTrigger = parseFloat(GJP_DATA.trigger_amount || 3600000);
+    const gjpContrib = parseFloat(GJP_DATA.contribution_rate || 0.015);
 
     simInterval = setInterval(() => {
         let batchLogs = [];
         for(let b=0; b<BATCH_SIZE && spins < MAX_SPINS; b++) {
             spins++;
             totalIn += bet;
+            simJackpot += (bet * gjpContrib);
 
-            // Generate physical board drops using V6.4 Hash Simulation
-            // We simulate the 3 hash chunks (0.0 to 0.999...)
-            const entropy = [Math.random(), Math.random(), Math.random()];
+            // V6.8 Cryptographic Mapping
+            const entropy = [Math.random(), Math.random(), Math.random(), Math.random(), Math.random()];
             let result = Array(9).fill(0);
 
             for (let i = 1; i <= 3; i++) {
                 const len = virtualReels[i].length;
                 const stopIdx = Math.floor(entropy[i - 1] * len);
-                
                 const topIdx = (stopIdx - 1 < 0) ? len - 1 : stopIdx - 1;
                 const botIdx = (stopIdx + 1 >= len) ? 0 : stopIdx + 1;
                 
@@ -436,22 +489,48 @@ function startMatrixSim() {
                 result[colOffset + 6] = virtualReels[i][botIdx];     
             }
 
-            // V6.4 10-Billion Scale RNG Hit Engine
-            let isHit = (Math.random() * 10000000000) <= (baseHitRate * 100000000);
+            // GJP Independent Roll
+            let isGrandJackpot = false;
+            let progress = Math.max(0, (simJackpot - gjpTrigger) / Math.max(1, (gjpMax - gjpTrigger)));
+            let noise = (entropy[4] * 0.2);
+            let baseOdds = Math.max(500, Math.floor(15000000 / Math.max(1, bet)));
+            let adjustedOdds = Math.max(2, Math.floor(baseOdds * (1 - progress + noise)));
             
-            if (isHit) {
-                // In Sandbox, if hit triggers, we evaluate the board. 
-                // If the board didn't naturally form a line, we force it for the sake of RTP telemetry.
-                // Note: Real engine forces win creation earlier. We mimic that here.
-                
-                // Pick random line to force win if needed (Simplified Sandbox version)
-                let winSym = [2,3,4,5,6,7][Math.floor(Math.random()*6)];
-                let winAmt = bet * multipliers[winSym];
-                totalOut += winAmt;
+            if (entropy[3] <= (1 / adjustedOdds) || simJackpot >= gjpMax) {
+                isGrandJackpot = true;
+                totalOut += simJackpot;
                 totalWinningSpins++;
-                
-                if (multipliers[winSym] >= 10) {
-                    batchLogs.push(`<div class="terminal-line"><span style="color:#0aa">[#${spins.toString().padStart(5,'0')}]</span> HIT! [${names[winSym]}]x3 -> <span style="color:#ff0">+${winAmt.toLocaleString()} MMK</span></div>`);
+                batchLogs.push(`<div class="terminal-line"><span style="color:#f0f">[#${spins.toString().padStart(5,'0')}]</span> ASTRONOMICAL! GJP INDEPENDENT TRIGGER -> <span style="color:#ff0">+${Math.floor(simJackpot).toLocaleString()} MMK</span></div>`);
+                simJackpot = parseFloat(GJP_DATA.base_seed || 3000000);
+            }
+
+            // Pure Payline Evaluation
+            let spinWin = 0;
+            let isLineWin = false;
+
+            for (let line of paylines) {
+                let s1 = result[line[0]];
+                let s2 = result[line[1]];
+                let s3 = result[line[2]];
+
+                if (s1 === s2 && s2 === s3) {
+                    isLineWin = true;
+                    // If GJP independently triggered, don't double count the physical 1s
+                    if (s1 === 1 && !isGrandJackpot) {
+                        spinWin += bet * multipliers[s1];
+                    } else if (s1 !== 1) {
+                        spinWin += bet * multipliers[s1];
+                    }
+                }
+            }
+
+            if (isLineWin && spinWin > 0) {
+                totalOut += spinWin;
+                totalWinningSpins++;
+                if (spinWin >= bet * 10) {
+                    // Just grab first symbol of line 0 for log display reference
+                    let dispSym = result[paylines[0][0]]; 
+                    batchLogs.push(`<div class="terminal-line"><span style="color:#0aa">[#${spins.toString().padStart(5,'0')}]</span> NATURAL HIT! [${SYM_NAMES[dispSym]}] -> <span style="color:#0f0">+${spinWin.toLocaleString()} MMK</span></div>`);
                 }
             }
         }
@@ -467,7 +546,7 @@ function startMatrixSim() {
 
         if (spins >= MAX_SPINS) {
             clearInterval(simInterval);
-            logBuffer.push(`<div class="terminal-line mt-3" style="color:#0f0; font-weight:900;">> V6.4 SANDBOX SIMULATION COMPLETE.</div>`);
+            logBuffer.push(`<div class="terminal-line mt-3" style="color:#0f0; font-weight:900;">> BASELINE SANDBOX COMPLETE.</div>`);
             term.innerHTML = logBuffer.join('');
             term.scrollTop = term.scrollHeight;
             
@@ -475,12 +554,6 @@ function startMatrixSim() {
             let hitFreq = ((totalWinningSpins / MAX_SPINS) * 100).toFixed(2);
             document.getElementById('resActualRtp').innerText = `${actualRtp}%`;
             document.getElementById('resHitFreq').innerText = `${hitFreq}%`;
-            
-            const diff = actualRtp - targetRtp;
-            const actEl = document.getElementById('resActualRtp');
-            if (diff > 3) actEl.className = "text-danger fs-3 fw-black drop-shadow-[0_0_10px_red] animate-pulse";
-            else if (diff < -3) actEl.className = "text-warning fs-3 fw-black";
-            else actEl.className = "text-info fs-3 fw-black drop-shadow-[0_0_10px_cyan]";
             
             document.getElementById('simResults').classList.remove('d-none');
             document.getElementById('simResults').classList.add('d-flex');
@@ -492,9 +565,10 @@ function stopSimulation() {
     if (simInterval) clearInterval(simInterval);
 }
 
-// Init lock state on load
+// Init lock state and analytics on load
 document.addEventListener("DOMContentLoaded", () => {
     toggleMatrixLock(); 
+    updateStripAnalytics();
 });
 </script>
 
