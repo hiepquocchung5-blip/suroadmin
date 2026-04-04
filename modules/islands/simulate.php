@@ -2,16 +2,11 @@
 // Ensure this is loaded via the router
 if (!defined('ADMIN_BASE_PATH')) exit('Direct access denied');
 
-$pageTitle = "Leviathan Simulation Lab";
+$pageTitle = "Leviathan Simulation Lab (V7.3)";
 requireRole(['GOD']);
 
 // --- FETCH ISLANDS & CURRENT DATABASE CONFIGS ---
 $islands = $pdo->query("SELECT * FROM islands WHERE id <= 5 ORDER BY id ASC")->fetchAll(PDO::FETCH_ASSOC);
-
-// V6.8+ Fetch Physical Reel Stops
-$stopsQuery = $pdo->query("SELECT * FROM reel_stops ORDER BY island_id, reel_index, stop_pos");
-$allStops = $stopsQuery->fetchAll(PDO::FETCH_ASSOC);
-$stripsByIsland = [];
 
 // Fetch Payout Multipliers
 $payoutsQuery = $pdo->query("SELECT * FROM island_symbol_payouts");
@@ -23,36 +18,31 @@ $jackpotsQuery = $pdo->query("SELECT * FROM global_jackpots WHERE island_id IS N
 $allJackpots = $jackpotsQuery->fetchAll(PDO::FETCH_ASSOC);
 $jackpotsByIsland = [];
 
-// Fallbacks & Mapping
-$defaultStrip = [6,4,2,6,5,3,6,7,6,4,2,6,5,3,6,7,6,2,4,6,5,7,6,3,1,6,4,5,6,7];
+// Fetch Leviathan Win Rates (V7)
+$winRatesQuery = $pdo->query("SELECT * FROM island_win_rates");
+$allWinRates = $winRatesQuery->fetchAll(PDO::FETCH_ASSOC);
+$winRatesByIsland = [];
 
+// Fallbacks & Mapping
 foreach($islands as $isl) {
-    // Inject default physical strips
-    $stripsByIsland[$isl['id']] = [
-        1 => $defaultStrip,
-        2 => $defaultStrip,
-        3 => $defaultStrip
-    ];
     $payoutsByIsland[$isl['id']] = [
-        'sym_1_mult'=>100, 'sym_2_mult'=>20, 'sym_3_mult'=>10, 'sym_4_mult'=>10, 'sym_5_mult'=>15, 'sym_6_mult'=>2, 'sym_7_mult'=>0
+        'sym_1_mult'=>0.0, 'sym_2_mult'=>20, 'sym_3_mult'=>10, 'sym_4_mult'=>10, 'sym_5_mult'=>15, 'sym_6_mult'=>2, 'sym_7_mult'=>0
     ];
     $jackpotsByIsland[$isl['id']] = [
         'base_seed' => 3000000, 'trigger_amount' => 3600000, 'max_amount' => 7200000, 'contribution_rate' => 0.015
     ];
+    $winRatesByIsland[$isl['id']] = [
+        'base_hit_rate' => 60.00, 'target_base_rtp' => 6.00, 'max_rtp_cap' => 95.00, 'burst_volatility' => 1.50
+    ];
 }
 
 // Overwrite with DB data
-$processedIslands = [];
-foreach ($allStops as $s) {
-    if (!isset($processedIslands[$s['island_id']][$s['reel_index']])) {
-        $stripsByIsland[$s['island_id']][$s['reel_index']] = []; // Clear fallback
-        $processedIslands[$s['island_id']][$s['reel_index']] = true;
-    }
-    $stripsByIsland[$s['island_id']][$s['reel_index']][$s['stop_pos']] = (int)$s['symbol_id'];
+foreach ($allPayouts as $p) { 
+    $p['sym_1_mult'] = 0.0; // V7.3 strict enforcement: GJP pool is sole payout
+    $payoutsByIsland[$p['island_id']] = $p; 
 }
-
-foreach ($allPayouts as $p) { $payoutsByIsland[$p['island_id']] = $p; }
 foreach ($allJackpots as $j) { $jackpotsByIsland[$j['island_id']] = $j; }
+foreach ($allWinRates as $w) { $winRatesByIsland[$w['island_id']] = $w; }
 
 require_once ADMIN_BASE_PATH . '/layout/main.php';
 ?>
@@ -101,7 +91,7 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
         <h2 class="fw-black text-danger italic tracking-widest mb-0 drop-shadow-[0_0_15px_rgba(239,68,68,0.5)]">
             <i class="bi bi-radioactive"></i> LEVIATHAN DEEP SIMULATION LAB
         </h2>
-        <p class="text-muted small mt-1 font-mono">Execute high-volume mathematical integrity audits using local device CPU rendering.</p>
+        <p class="text-muted small mt-1 font-mono">Execute high-volume V7.3 algorithmic integrity audits using local device CPU rendering.</p>
     </div>
     <a href="?route=content/islands" class="btn btn-outline-secondary fw-bold rounded-pill px-4 shadow-sm hover:text-white transition-colors">
         <i class="bi bi-arrow-left me-2"></i> EXIT LAB
@@ -120,7 +110,7 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
                 <label class="text-gray-400 small fw-bold text-uppercase tracking-widest mb-2">Target Island Ecosystem</label>
                 <select id="simIsland" class="form-select bg-dark text-white border-secondary fw-bold shadow-inner">
                     <?php foreach($islands as $isl): ?>
-                        <option value="<?= $isl['id'] ?>" data-rtp="<?= $isl['rtp_rate'] ?>"><?= htmlspecialchars($isl['name']) ?></option>
+                        <option value="<?= $isl['id'] ?>"><?= htmlspecialchars($isl['name']) ?></option>
                     <?php endforeach; ?>
                 </select>
             </div>
@@ -189,7 +179,8 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
                 <div class="terminal-container p-4 font-mono text-sm hide-scrollbar flex-grow-1 sim-lab-bg" style="height: 50vh; min-height: 400px; overflow-y: auto;">
                     <div id="deepTerminal">
                         > SYSTEM READY.<br>
-                        > V6.8 CRYPTOGRAPHIC STRIP SAMPLING ENGINE LOADED.<br>
+                        > V7.3 ALGORITHMIC GRID GENERATOR LOADED.<br>
+                        > ZERO-COLLISION LOSS MATRICES ACTIVE.<br>
                         > AWAITING SIMULATION PARAMETERS.<br>
                     </div>
                 </div>
@@ -205,7 +196,7 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
                         <!-- Core Metrics -->
                         <div class="d-grid gap-2 font-mono mb-4">
                             <div class="p-3 border border-secondary rounded bg-dark d-flex justify-content-between align-items-center">
-                                <span class="text-gray-400 text-xs">THEORY RTP (CONFIG)</span>
+                                <span class="text-gray-400 text-xs">THEORY RTP (Total)</span>
                                 <span class="text-gray-200 fs-5 fw-bold" id="resDeepTheory">0%</span>
                             </div>
                             <div class="p-3 border border-danger rounded bg-danger bg-opacity-10 d-flex justify-content-between align-items-center shadow-[0_0_15px_rgba(239,68,68,0.3)]">
@@ -215,7 +206,7 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
                             
                             <!-- Hit Frequency Metric -->
                             <div class="p-3 border border-secondary rounded bg-dark d-flex justify-content-between align-items-center">
-                                <span class="text-gray-400 text-xs">PHYSICAL HIT FREQUENCY</span>
+                                <span class="text-gray-400 text-xs">ALGORITHMIC HIT FREQUENCY</span>
                                 <span class="text-warning fs-5 fw-bold" id="resDeepHitFreq">0%</span>
                             </div>
                             
@@ -250,7 +241,7 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
                             </div>
 
                             <!-- Organic Near-Miss Tracking -->
-                            <div class="text-[9px] text-gray-500 uppercase tracking-widest mb-2 fw-bold">Physical Strip Observations (Payline)</div>
+                            <div class="text-[9px] text-gray-500 uppercase tracking-widest mb-2 fw-bold">Algorithm Observations (Payline)</div>
                             <div class="d-flex justify-content-between text-[10px]">
                                 <span>Single <b class="text-danger">[1]</b>: <span id="gjp1Count" class="text-white fw-bold ms-1">0</span></span>
                                 <span>Teaser <b class="text-danger">[1-1]</b>: <span id="gjp2Count" class="text-white fw-bold ms-1">0</span></span>
@@ -280,9 +271,9 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
                             </table>
                         </div>
 
-                        <!-- REEL SPAWN MATRIX -->
+                        <!-- ALGORITHMIC SPAWN MATRIX -->
                         <h6 class="text-gray-500 font-mono text-[10px] uppercase tracking-widest mb-2 border-bottom border-secondary pb-1">
-                            <i class="bi bi-grid-3x3 text-warning me-1"></i> Physical Strip Distribution
+                            <i class="bi bi-grid-3x3 text-warning me-1"></i> Rendered Grid Distribution
                         </h6>
                         <div class="text-[10px] text-gray-300 font-mono flex-grow-1 bg-black bg-opacity-50 p-3 rounded border border-white border-opacity-5">
                             <div class="row text-center g-2" id="deepSymDistro"></div>
@@ -299,11 +290,11 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
 </div>
 
 <script>
-    // Inject V6.8 configurations from PHP
+    // Inject V7.3 configurations from PHP
     const DB_ISLANDS = <?= json_encode($islands) ?>;
-    const DB_STRIPS = <?= json_encode($stripsByIsland) ?>;
     const DB_PAYOUTS = <?= json_encode($payoutsByIsland) ?>;
     const DB_JACKPOTS = <?= json_encode($jackpotsByIsland) ?>;
+    const DB_WIN_RATES = <?= json_encode($winRatesByIsland) ?>;
     
     let simTimeout = null;
     let isSimRunning = false;
@@ -314,20 +305,26 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
         if (el) el.innerText = text;
     };
 
+    // Class Mapping for dynamic UI colors
+    const SYM_NAMES = { 1: 'GJP', 2: 'LOGO', 3: '7SEV', 4: 'MELN', 5: 'BELL', 6: 'CHER', 7: 'REPL' };
+    const SYM_COLORS = { 1: '#ef4444', 2: '#a855f7', 3: '#f97316', 4: '#22c55e', 5: '#eab308', 6: '#ec4899', 7: '#06b6d4' };
+
     function startDeepSim() {
         if (isSimRunning) return;
         
         const islandSelect = document.getElementById('simIsland');
         const islandId = parseInt(islandSelect.value);
-        const targetRtp = parseFloat(islandSelect.options[islandSelect.selectedIndex].getAttribute('data-rtp'));
         const maxSpins = parseInt(document.getElementById('simSpins').value);
         const bet = parseInt(document.getElementById('simBet').value);
 
         const island = DB_ISLANDS.find(i => parseInt(i.id) === islandId);
-        const strips = DB_STRIPS[islandId];
         const pouts = DB_PAYOUTS[islandId];
+        const winRates = DB_WIN_RATES[islandId];
         const gjpData = DB_JACKPOTS[islandId] || { base_seed: 3000000, trigger_amount: 3600000, max_amount: 7200000, contribution_rate: 0.015 };
         
+        // Calculate Total Theoretical RTP (Base Hits + GJP Target)
+        const targetRtp = parseFloat(island.rtp_rate) || (parseFloat(winRates.base_hit_rate) + parseFloat(winRates.target_base_rtp));
+
         isSimRunning = true;
         document.getElementById('btnStartSim').classList.add('d-none');
         document.getElementById('btnStopSim').classList.remove('d-none');
@@ -353,19 +350,22 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
         let logBuffer = [
             `> <span style="color:#fff;">[SYSTEM]</span> INITIATING LOCAL CPU AUDIT PROTOCOL...`,
             `> <span style="color:#fff;">[TARGET]</span> Ecosystem: ${island.name}`,
-            `> <span style="color:#fff;">[CONFIG]</span> Constructing 3x3 Physical Virtual Reels...`,
+            `> <span style="color:#fff;">[CONFIG]</span> V7.3 Zero-Collision Algorithm Active.`,
             `> <span style="color:#fff;">[JACKPOT]</span> Active Math Model Loaded (Base: ${gjpData.base_seed})`,
             `> <span style="color:#fff;">[PARAMS]</span> Executing ${maxSpins.toLocaleString()} iterations at ${bet.toLocaleString()} MMK bet...`,
             `> --------------------------------------------------`
         ];
         term.innerHTML = logBuffer.join('<br/>');
 
-        // V6.8 Engine Configs
+        // V7.3 Engine Configs
         const multipliers = {
-            1: parseFloat(pouts.sym_1_mult), 2: parseFloat(pouts.sym_2_mult), 3: parseFloat(pouts.sym_3_mult),
-            4: parseFloat(pouts.sym_4_mult), 5: parseFloat(pouts.sym_5_mult), 6: parseFloat(pouts.sym_6_mult), 7: parseFloat(pouts.sym_7_mult)
+            1: 0.0, // Hardcoded 0.0 for GJP, it pays the pool
+            2: parseFloat(pouts.sym_2_mult), 3: parseFloat(pouts.sym_3_mult),
+            4: parseFloat(pouts.sym_4_mult), 5: parseFloat(pouts.sym_5_mult), 
+            6: parseFloat(pouts.sym_6_mult), 7: parseFloat(pouts.sym_7_mult)
         };
         const paylines = [[0, 1, 2], [3, 4, 5], [6, 7, 8], [0, 4, 8], [6, 4, 2]];
+        const availableSyms = [2, 3, 4, 5, 6, 7];
 
         // Telemetry Trackers
         let spins = 0;
@@ -373,6 +373,11 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
         let totalOut = 0;
         let totalWinningSpins = 0;
         
+        // V7.3 Math Rates
+        const baseHitRate = parseFloat(winRates.base_hit_rate) / 100;
+        const gjpTargetRtp = parseFloat(winRates.target_base_rtp) / 100;
+        const burstVol = parseFloat(winRates.burst_volatility);
+
         // GJP Telemetry
         let simJackpot = parseFloat(gjpData.base_seed);
         const gjpMax = parseFloat(gjpData.max_amount);
@@ -387,11 +392,7 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
         let winCounts = {1:0, 2:0, 3:0, 4:0, 5:0, 6:0, 7:0};
         let winPayouts = {1:0, 2:0, 3:0, 4:0, 5:0, 6:0, 7:0};
 
-        const symbolIcons = {1:'[GJP]', 2:'[LOGO]', 3:'[7SEV]', 4:'[MELN]', 5:'[BELL]', 6:'[CHER]', 7:'[REPL]'};
-        const names = {1:'GJP', 2:'LOGO', 3:'7SEV', 4:'Melon', 5:'Bell', 6:'Cherry', 7:'Replay'};
-        const colors = {1:'#ef4444', 2:'#a855f7', 3:'#f97316', 4:'#22c55e', 5:'#eab308', 6:'#ec4899', 7:'#06b6d4'};
-
-        // Optimize chunk size to prevent browser freezing while counting up nicely
+        // Optimize chunk size to prevent browser freezing
         const CHUNK_SIZE = Math.min(25000, Math.ceil(maxSpins / 200)); 
 
         function runChunk() {
@@ -406,41 +407,86 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
                 
                 // Add to progressive pot
                 simJackpot += (bet * gjpContrib);
-
-                // 1. Cryptographic Entropy Extraction Simulation (5 chunks for V6.8)
-                const entropy = [Math.random(), Math.random(), Math.random(), Math.random(), Math.random()];
-
-                // 2. Physical Reel Mapping with Wrap-around
-                for (let i = 1; i <= 3; i++) {
-                    const len = strips[i].length;
-                    const stopIdx = Math.floor(entropy[i - 1] * len); 
-                    
-                    const topIdx = (stopIdx - 1 < 0) ? len - 1 : stopIdx - 1;
-                    const botIdx = (stopIdx + 1 >= len) ? 0 : stopIdx + 1;
-                    
-                    const colOffset = i - 1;
-                    result[colOffset]     = strips[i][topIdx]; 
-                    result[colOffset + 3] = strips[i][stopIdx];    
-                    result[colOffset + 6] = strips[i][botIdx];     
+                if (simJackpot >= gjpMax) {
+                    simJackpot = gjpMax; // Hard cap
                 }
 
-                // 3. Independent Jackpot Evaluation (V6.8 Math)
-                let isGrandJackpot = false;
-                let progress = Math.max(0, (simJackpot - gjpTrigger) / Math.max(1, (gjpMax - gjpTrigger)));
-                let noise = (entropy[4] * 0.2);
-                let baseOdds = Math.max(500, Math.floor(15000000 / Math.max(1, bet)));
-                let adjustedOdds = Math.max(2, Math.floor(baseOdds * (1 - progress + noise)));
-                let jpRollTarget = 1 / adjustedOdds;
+                // V7.3 Cryptographic Entropy Array (15 chunks)
+                const entropy = Array.from({length: 15}, () => Math.random());
 
-                if (entropy[3] <= jpRollTarget || simJackpot >= gjpMax) {
+                // V7.3 Independent Jackpot Evaluation
+                let isGrandJackpot = false;
+                let gjpProb = (gjpTargetRtp * bet) / Math.max(1, simJackpot);
+                let heatPct = Math.min(100, Math.max(0, ((simJackpot - parseFloat(gjpData.base_seed)) / Math.max(1, (gjpMax - parseFloat(gjpData.base_seed)))) * 100));
+                
+                if (simJackpot >= gjpMax) {
                     isGrandJackpot = true;
+                } else if (heatPct >= 80.0) {
+                    gjpProb *= (burstVol * 2.0);
+                } else if (heatPct >= 50.0) {
+                    gjpProb *= burstVol;
+                }
+                
+                if (!isGrandJackpot && entropy[3] <= gjpProb) {
+                    isGrandJackpot = true;
+                }
+
+                if (isGrandJackpot) {
                     totalGjpHits++;
                     sumGjpPayouts += simJackpot;
-                    
                     batchLogs.push(`<div class="terminal-line"><span style="color:#f0f">[#${(spins+1).toString().padStart(8,'0')}]</span> ASTRONOMICAL! GRAND JACKPOT TRIGGERED -> <span style="color:#ff0">+${Math.floor(simJackpot).toLocaleString()} MMK</span></div>`);
+                    simJackpot = parseFloat(gjpData.base_seed); // Reset Pot
+                }
+
+                // V7.3 Algorithmic Grid Generation
+                let isHit = (entropy[4] <= baseHitRate);
+                result.fill(0);
+
+                if (isGrandJackpot) {
+                    let winLine = paylines[Math.floor(entropy[0] * 5)];
+                    winLine.forEach(pos => result[pos] = 1);
                     
-                    // Reset Pot
-                    simJackpot = parseFloat(gjpData.base_seed);
+                    let fillCursor = 5;
+                    for (let i = 0; i < 9; i++) {
+                        if (result[i] === 0) {
+                            result[i] = availableSyms[Math.floor(entropy[fillCursor] * 6)];
+                            fillCursor++;
+                        }
+                    }
+                } else if (isHit) {
+                    const symWeights = {2: 5, 3: 10, 4: 20, 5: 20, 6: 30, 7: 15};
+                    const totalWeight = 100;
+                    let randW = entropy[1] * totalWeight;
+                    let winSym = 7;
+                    let sum = 0;
+                    for (const [s, w] of Object.entries(symWeights)) {
+                        sum += w;
+                        if (randW <= sum) { winSym = parseInt(s); break; }
+                    }
+
+                    let winLine = paylines[Math.floor(entropy[2] * 5)];
+                    winLine.forEach(pos => result[pos] = winSym);
+
+                    let fillCursor = 5;
+                    for (let i = 0; i < 9; i++) {
+                        if (result[i] === 0) {
+                            let filler = availableSyms[Math.floor(entropy[fillCursor] * 6)];
+                            result[i] = (filler === winSym) ? (filler === 7 ? 2 : filler + 1) : filler;
+                            fillCursor++;
+                        }
+                    }
+                } else {
+                    // Zero Collision Generation
+                    for (let i = 0; i < 9; i++) {
+                        result[i] = availableSyms[Math.floor(entropy[5 + i] * 6)];
+                    }
+                    for (let line of paylines) {
+                        if (result[line[0]] === result[line[1]] && result[line[1]] === result[line[2]]) {
+                            let shift = Math.floor(entropy[14] * 5) + 1;
+                            let currentIndex = availableSyms.indexOf(result[line[2]]);
+                            result[line[2]] = availableSyms[(currentIndex + shift) % 6];
+                        }
+                    }
                 }
 
                 // 4. Line Evaluation & Organic GJP Spawn Tracking
@@ -476,14 +522,13 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
                 if (isGrandJackpot) {
                     winCounts[1]++;
                     isLineWin = true;
-                    spinWin += 0; // Jackpot amount handled independently, but spin is marked as a win
+                    spinWin += 0; // Jackpot amount handled independently
                 }
 
                 if (isLineWin && (spinWin > 0 || isGrandJackpot)) {
                     totalOut += spinWin;
                     totalWinningSpins++;
                     
-                    // Attribute payout to the highest winning symbol on this spin for simple matrix display
                     let dominantSym = isGrandJackpot ? 1 : result[paylines[0][0]]; 
                     
                     if (!isGrandJackpot) {
@@ -491,8 +536,6 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
                         if (spinWin >= bet * 15) {
                             batchLogs.push(`<div class="terminal-line"><span style="color:#0aa">[#${(spins+1).toString().padStart(8,'0')}]</span> CRITICAL PAYOUT! -> <span style="color:#ff0">+${spinWin.toLocaleString()} MMK</span></div>`);
                         }
-                    } else {
-                        // For display, we add the average jackpot hit size to winPayouts[1] later in finalize
                     }
                 }
             }
@@ -512,7 +555,6 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
             }
 
             // Live HUD Updates
-            // Add estimated GJP total to current RTP to keep it accurate mid-simulation
             let currentTotalOut = totalOut + sumGjpPayouts; 
             let currentRtp = totalIn > 0 ? ((currentTotalOut / totalIn) * 100).toFixed(2) : 0;
             let currentPnl = totalIn - currentTotalOut;
@@ -528,10 +570,9 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
 
             // Loop Control
             if (spins < maxSpins) {
-                // Schedule next chunk immediately to keep UI unblocked
                 simTimeout = setTimeout(runChunk, 10);
             } else {
-                finalizeSim(targetRtp, maxSpins, totalIn, totalOut, totalWinningSpins, winCounts, winPayouts, hits, multipliers, names, colors, totalGjpHits, sumGjpPayouts, naturalGjpSpawns);
+                finalizeSim(targetRtp, maxSpins, totalIn, totalOut, totalWinningSpins, winCounts, winPayouts, hits, multipliers, SYM_NAMES, SYM_COLORS, totalGjpHits, sumGjpPayouts, naturalGjpSpawns);
             }
         }
 
@@ -589,7 +630,6 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
         safeSetText('gjp2Count', naturalGjpSpawns['2_count'].toLocaleString());
         safeSetText('gjp3Count', naturalGjpSpawns['3_count'].toLocaleString());
 
-        // Merge GJP into payouts for accurate matrix display
         winPayouts[1] += sumGjpPayouts;
 
         // 3. Build Payout Contribution Matrix (Wins Only)
@@ -615,7 +655,7 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
         if(matrixEl) matrixEl.innerHTML = payoutHtml;
 
         // 4. Distribution Matrix (All Spawns)
-        const totalSyms = maxSpins * 9; // 9 symbols per spin grid
+        const totalSyms = maxSpins * 9; 
         let distHtml = '';
         for(let i=1; i<=7; i++) {
             let pct = ((hits[i] / totalSyms) * 100).toFixed(2);
@@ -657,7 +697,7 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
         
         const opt = {
             margin:       0.5,
-            filename:     'Suropara_V6.8_Audit_Report.pdf',
+            filename:     'Suropara_V7.3_Audit_Report.pdf',
             image:        { type: 'jpeg', quality: 0.98 },
             html2canvas:  { scale: 2, useCORS: true, backgroundColor: '#000000' },
             jsPDF:        { unit: 'in', format: 'letter', orientation: 'portrait' }
