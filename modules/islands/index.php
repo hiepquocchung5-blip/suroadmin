@@ -26,14 +26,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 cleanInput($_POST['hostess_char_id']), $_POST['atmosphere_type'], $id
             ]);
 
-            // Update Leviathan AI Win Rates
-            $sqlWinRates = "INSERT INTO island_win_rates (island_id, base_hit_rate, max_rtp_cap, burst_volatility) 
-                            VALUES (?, ?, ?, ?) 
+            // Update Leviathan AI Win Rates (V7: Included target_base_rtp)
+            $sqlWinRates = "INSERT INTO island_win_rates (island_id, base_hit_rate, target_base_rtp, max_rtp_cap, burst_volatility) 
+                            VALUES (?, ?, ?, ?, ?) 
                             ON DUPLICATE KEY UPDATE 
-                            base_hit_rate=VALUES(base_hit_rate), max_rtp_cap=VALUES(max_rtp_cap), burst_volatility=VALUES(burst_volatility)";
+                            base_hit_rate=VALUES(base_hit_rate), target_base_rtp=VALUES(target_base_rtp), max_rtp_cap=VALUES(max_rtp_cap), burst_volatility=VALUES(burst_volatility)";
             $pdo->prepare($sqlWinRates)->execute([
                 $id, 
                 (float)$_POST['base_hit_rate'], 
+                (float)$_POST['target_base_rtp'], 
                 (float)$_POST['max_rtp_cap'], 
                 (float)$_POST['burst_volatility']
             ]);
@@ -129,7 +130,7 @@ foreach($islands as $isl) {
         'sym_1_mult'=>100, 'sym_2_mult'=>20, 'sym_3_mult'=>10, 'sym_4_mult'=>10, 'sym_5_mult'=>15, 'sym_6_mult'=>2, 'sym_7_mult'=>0
     ];
     $winRatesByIsland[$isl['id']] = [
-        'base_hit_rate'=>22.00000000, 'max_rtp_cap'=>95.00000000, 'burst_volatility'=>1.50000000
+        'base_hit_rate'=>22.00000000, 'target_base_rtp'=>6.00000000, 'max_rtp_cap'=>95.00000000, 'burst_volatility'=>1.50000000
     ];
 }
 
@@ -317,11 +318,11 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
                 <div class="bg-danger bg-opacity-10 border border-danger border-opacity-30 rounded-lg p-3 mb-4 font-mono">
                     <div class="d-flex justify-content-between align-items-center mb-1 text-[10px]">
                         <span class="text-danger fw-bold uppercase"><i class="bi bi-cpu"></i> LEVIATHAN AI</span>
-                        <span class="text-gray-400">Target RTP: <span class="text-white"><?= number_format($isl['rtp_rate'], 1) ?>%</span></span>
+                        <span class="text-gray-400">Total RTP: <span class="text-white"><?= number_format($isl['rtp_rate'], 1) ?>%</span></span>
                     </div>
                     <div class="d-flex justify-content-between text-[10px] text-gray-300">
-                        <span>Base Hit: <span class="text-white fw-bold"><?= number_format($wr['base_hit_rate'], 4) ?>%</span></span>
-                        <span>Hard Cap: <span class="text-white fw-bold"><?= number_format($wr['max_rtp_cap'], 2) ?>%</span></span>
+                        <span>Base Hit: <span class="text-white fw-bold"><?= number_format($wr['base_hit_rate'], 2) ?>%</span></span>
+                        <span>GJP Target: <span class="text-white fw-bold"><?= number_format($wr['target_base_rtp'] ?? 6.0, 2) ?>%</span></span>
                     </div>
                 </div>
 
@@ -552,20 +553,26 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
                         <div class="row g-4 font-mono">
                             <div class="col-md-12">
                                 <label class="form-label d-flex justify-content-between">
-                                    <span class="fw-bold text-info small">Target Base RTP (%)</span>
+                                    <span class="fw-bold text-info small">Total Target RTP (%)</span>
                                     <span class="text-info fw-black font-mono fs-5" id="rtpInputDisplay">70%</span>
                                 </label>
                                 <input type="range" name="rtp_rate" id="editRtp" class="form-range" min="10" max="95" step="0.5" oninput="document.getElementById('rtpInputDisplay').innerText = this.value + '%'">
                             </div>
-                            <div class="col-md-4">
+                            
+                            <!-- V7: Adjusted to fit 4 columns neatly -->
+                            <div class="col-md-3">
                                 <label class="small text-danger fw-bold text-[10px] tracking-widest">Base Hit Rate (%)</label>
                                 <input type="number" step="0.00000001" name="base_hit_rate" id="editBaseHit" class="form-control bg-black text-danger border-danger shadow-[inset_0_0_10px_rgba(239,68,68,0.2)]" required>
                             </div>
-                            <div class="col-md-4">
-                                <label class="small text-danger fw-bold text-[10px] tracking-widest">Hard Max RTP Cap (%)</label>
+                            <div class="col-md-3">
+                                <label class="small text-danger fw-bold text-[10px] tracking-widest">GJP Target RTP (%)</label>
+                                <input type="number" step="0.00000001" name="target_base_rtp" id="editGjpRtp" class="form-control bg-black text-danger border-danger shadow-[inset_0_0_10px_rgba(239,68,68,0.2)]" required>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="small text-danger fw-bold text-[10px] tracking-widest">Max RTP Cap (%)</label>
                                 <input type="number" step="0.00000001" name="max_rtp_cap" id="editMaxRtp" class="form-control bg-black text-danger border-danger shadow-[inset_0_0_10px_rgba(239,68,68,0.2)]" required>
                             </div>
-                            <div class="col-md-4">
+                            <div class="col-md-3">
                                 <label class="small text-danger fw-bold text-[10px] tracking-widest">Burst Volatility (x)</label>
                                 <input type="number" step="0.00000001" name="burst_volatility" id="editBurstVol" class="form-control bg-black text-danger border-danger shadow-[inset_0_0_10px_rgba(239,68,68,0.2)]" required>
                             </div>
@@ -634,8 +641,9 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
         document.getElementById('editRtp').value = island.rtp_rate;
         document.getElementById('rtpInputDisplay').innerText = island.rtp_rate + '%';
 
-        // Leviathan Win Rates
+        // Leviathan Win Rates (V7)
         document.getElementById('editBaseHit').value = winRates.base_hit_rate;
+        document.getElementById('editGjpRtp').value = winRates.target_base_rtp || 6.0;
         document.getElementById('editMaxRtp').value = winRates.max_rtp_cap;
         document.getElementById('editBurstVol').value = winRates.burst_volatility;
 
@@ -678,7 +686,8 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
         
         let logBuffer = [
             `> Initializing V6.8 Quick Sim for [${island.name}]...`,
-            `> Target Base RTP: <span style="color:#0ff">${island.rtp_rate}%</span>`,
+            `> Target Total RTP: <span style="color:#0ff">${island.rtp_rate}%</span>`,
+            `> GJP Target RTP: <span style="color:#f0f">${wRates.target_base_rtp || 6.0}%</span>`,
             `> Reading physical reel tapes...`,
             `> Executing 10,000 spins at 1,000 MMK bet...`,
             `--------------------------------------------------`
