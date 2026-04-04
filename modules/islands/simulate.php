@@ -2,7 +2,7 @@
 // Ensure this is loaded via the router
 if (!defined('ADMIN_BASE_PATH')) exit('Direct access denied');
 
-$pageTitle = "Leviathan Simulation Lab (V7.3)";
+$pageTitle = "Leviathan Simulation Lab (V7.4)";
 requireRole(['GOD']);
 
 // --- FETCH ISLANDS & CURRENT DATABASE CONFIGS ---
@@ -18,7 +18,7 @@ $jackpotsQuery = $pdo->query("SELECT * FROM global_jackpots WHERE island_id IS N
 $allJackpots = $jackpotsQuery->fetchAll(PDO::FETCH_ASSOC);
 $jackpotsByIsland = [];
 
-// Fetch Leviathan Win Rates (V7)
+// Fetch Leviathan Win Rates (V7.4)
 $winRatesQuery = $pdo->query("SELECT * FROM island_win_rates");
 $allWinRates = $winRatesQuery->fetchAll(PDO::FETCH_ASSOC);
 $winRatesByIsland = [];
@@ -38,7 +38,7 @@ foreach($islands as $isl) {
 
 // Overwrite with DB data
 foreach ($allPayouts as $p) { 
-    $p['sym_1_mult'] = 0.0; // V7.3 strict enforcement: GJP pool is sole payout
+    $p['sym_1_mult'] = 0.0; // V7.4 strict enforcement: GJP pool is sole payout (T6)
     $payoutsByIsland[$p['island_id']] = $p; 
 }
 foreach ($allJackpots as $j) { $jackpotsByIsland[$j['island_id']] = $j; }
@@ -91,7 +91,7 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
         <h2 class="fw-black text-danger italic tracking-widest mb-0 drop-shadow-[0_0_15px_rgba(239,68,68,0.5)]">
             <i class="bi bi-radioactive"></i> LEVIATHAN DEEP SIMULATION LAB
         </h2>
-        <p class="text-muted small mt-1 font-mono">Execute high-volume V7.3 algorithmic integrity audits using local device CPU rendering.</p>
+        <p class="text-muted small mt-1 font-mono">Execute high-volume V7.4 algorithmic integrity audits using local device CPU rendering.</p>
     </div>
     <a href="?route=content/islands" class="btn btn-outline-secondary fw-bold rounded-pill px-4 shadow-sm hover:text-white transition-colors">
         <i class="bi bi-arrow-left me-2"></i> EXIT LAB
@@ -179,8 +179,9 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
                 <div class="terminal-container p-4 font-mono text-sm hide-scrollbar flex-grow-1 sim-lab-bg" style="height: 50vh; min-height: 400px; overflow-y: auto;">
                     <div id="deepTerminal">
                         > SYSTEM READY.<br>
-                        > V7.3 ALGORITHMIC GRID GENERATOR LOADED.<br>
+                        > V7.4 ALGORITHMIC GRID GENERATOR LOADED.<br>
                         > ZERO-COLLISION LOSS MATRICES ACTIVE.<br>
+                        > WIN PATH COLLISION PREVENTION ENABLED (N1).<br>
                         > AWAITING SIMULATION PARAMETERS.<br>
                     </div>
                 </div>
@@ -290,7 +291,7 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
 </div>
 
 <script>
-    // Inject V7.3 configurations from PHP
+    // Inject V7.4 configurations from PHP
     const DB_ISLANDS = <?= json_encode($islands) ?>;
     const DB_PAYOUTS = <?= json_encode($payoutsByIsland) ?>;
     const DB_JACKPOTS = <?= json_encode($jackpotsByIsland) ?>;
@@ -350,16 +351,16 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
         let logBuffer = [
             `> <span style="color:#fff;">[SYSTEM]</span> INITIATING LOCAL CPU AUDIT PROTOCOL...`,
             `> <span style="color:#fff;">[TARGET]</span> Ecosystem: ${island.name}`,
-            `> <span style="color:#fff;">[CONFIG]</span> V7.3 Zero-Collision Algorithm Active.`,
+            `> <span style="color:#fff;">[CONFIG]</span> V7.4 Zero-Collision Algorithm Active (N1 Fixes Included).`,
             `> <span style="color:#fff;">[JACKPOT]</span> Active Math Model Loaded (Base: ${gjpData.base_seed})`,
             `> <span style="color:#fff;">[PARAMS]</span> Executing ${maxSpins.toLocaleString()} iterations at ${bet.toLocaleString()} MMK bet...`,
             `> --------------------------------------------------`
         ];
         term.innerHTML = logBuffer.join('<br/>');
 
-        // V7.3 Engine Configs
+        // V7.4 Engine Configs
         const multipliers = {
-            1: 0.0, // Hardcoded 0.0 for GJP, it pays the pool
+            1: 0.0, // T6: Hardcoded 0.0 for GJP, it pays the pool
             2: parseFloat(pouts.sym_2_mult), 3: parseFloat(pouts.sym_3_mult),
             4: parseFloat(pouts.sym_4_mult), 5: parseFloat(pouts.sym_5_mult), 
             6: parseFloat(pouts.sym_6_mult), 7: parseFloat(pouts.sym_7_mult)
@@ -373,7 +374,7 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
         let totalOut = 0;
         let totalWinningSpins = 0;
         
-        // V7.3 Math Rates
+        // V7.4 Math Rates (T1: Streak Throttle Removed naturally)
         const baseHitRate = parseFloat(winRates.base_hit_rate) / 100;
         const gjpTargetRtp = parseFloat(winRates.target_base_rtp) / 100;
         const burstVol = parseFloat(winRates.burst_volatility);
@@ -408,17 +409,18 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
                 // Add to progressive pot
                 simJackpot += (bet * gjpContrib);
                 if (simJackpot >= gjpMax) {
-                    simJackpot = gjpMax; // Hard cap
+                    simJackpot = gjpMax; // T3: Hard cap ceiling
                 }
 
-                // V7.3 Cryptographic Entropy Array (15 chunks)
+                // V7.4 Cryptographic Entropy Array (15 chunks) (T2)
                 const entropy = Array.from({length: 15}, () => Math.random());
 
-                // V7.3 Independent Jackpot Evaluation
+                // V7.4 Independent Jackpot Evaluation
                 let isGrandJackpot = false;
                 let gjpProb = (gjpTargetRtp * bet) / Math.max(1, simJackpot);
                 let heatPct = Math.min(100, Math.max(0, ((simJackpot - parseFloat(gjpData.base_seed)) / Math.max(1, (gjpMax - parseFloat(gjpData.base_seed)))) * 100));
                 
+                // T3: Force trigger when pool reaches ceiling
                 if (simJackpot >= gjpMax) {
                     isGrandJackpot = true;
                 } else if (heatPct >= 80.0) {
@@ -438,11 +440,12 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
                     simJackpot = parseFloat(gjpData.base_seed); // Reset Pot
                 }
 
-                // V7.3 Algorithmic Grid Generation
+                // V7.4 Algorithmic Grid Generation
                 let isHit = (entropy[4] <= baseHitRate);
                 result.fill(0);
 
                 if (isGrandJackpot) {
+                    // N2: entropy[0] strictly for GJP line (0-4), entropy[5+] for filler to prevent RNG overlap
                     let winLine = paylines[Math.floor(entropy[0] * 5)];
                     winLine.forEach(pos => result[pos] = 1);
                     
@@ -453,6 +456,22 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
                             fillCursor++;
                         }
                     }
+
+                    // N1 FIX: Scrub accidental secondary paylines in filler
+                    let accidental;
+                    do {
+                        accidental = false;
+                        for (let line of paylines) {
+                            if (line === winLine) continue; // Skip intended line
+                            if (result[line[0]] === result[line[1]] && result[line[1]] === result[line[2]]) {
+                                accidental = true;
+                                let shift = Math.floor(Math.random() * 5) + 1;
+                                let cIdx = availableSyms.indexOf(result[line[2]]);
+                                result[line[2]] = availableSyms[(cIdx + shift) % 6];
+                            }
+                        }
+                    } while (accidental);
+
                 } else if (isHit) {
                     const symWeights = {2: 5, 3: 10, 4: 20, 5: 20, 6: 30, 7: 15};
                     const totalWeight = 100;
@@ -475,8 +494,26 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
                             fillCursor++;
                         }
                     }
+
+                    // N1 FIX: Scrub accidental secondary paylines in filler
+                    let accidental;
+                    do {
+                        accidental = false;
+                        for (let line of paylines) {
+                            if (line === winLine) continue; // Skip intended line
+                            if (result[line[0]] === result[line[1]] && result[line[1]] === result[line[2]]) {
+                                accidental = true;
+                                let shift = Math.floor(Math.random() * 5) + 1;
+                                let cIdx = availableSyms.indexOf(result[line[2]]);
+                                // Ensure we don't accidentally shift it to the winSym
+                                let newSym = availableSyms[(cIdx + shift) % 6];
+                                result[line[2]] = (newSym === winSym) ? availableSyms[(cIdx + shift + 1) % 6] : newSym;
+                            }
+                        }
+                    } while (accidental);
+
                 } else {
-                    // Zero Collision Generation
+                    // T2: Zero Collision Generation using strict entropy (No mt_rand)
                     for (let i = 0; i < 9; i++) {
                         result[i] = availableSyms[Math.floor(entropy[5 + i] * 6)];
                     }
@@ -522,7 +559,7 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
                 if (isGrandJackpot) {
                     winCounts[1]++;
                     isLineWin = true;
-                    spinWin += 0; // Jackpot amount handled independently
+                    spinWin += 0; // Jackpot amount handled independently (T6)
                 }
 
                 if (isLineWin && (spinWin > 0 || isGrandJackpot)) {
@@ -697,7 +734,7 @@ require_once ADMIN_BASE_PATH . '/layout/main.php';
         
         const opt = {
             margin:       0.5,
-            filename:     'Suropara_V7.3_Audit_Report.pdf',
+            filename:     'Suropara_V7.4_Audit_Report.pdf',
             image:        { type: 'jpeg', quality: 0.98 },
             html2canvas:  { scale: 2, useCORS: true, backgroundColor: '#000000' },
             jsPDF:        { unit: 'in', format: 'letter', orientation: 'portrait' }
